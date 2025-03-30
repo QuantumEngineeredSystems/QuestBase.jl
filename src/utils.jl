@@ -27,3 +27,30 @@ function get_Jacobian(eqs::Vector{Equation}, vars::Vector{Num})::Matrix{Num}
     expr = Num[getfield(eq, :lhs) - getfield(eq, :rhs) for eq in eqs]
     return get_Jacobian(expr, vars)
 end
+
+macro eqtest(expr)
+    @assert expr.head == :call && expr.args[1] in [:(==), :(!=)]
+    return esc(
+        if expr.args[1] == :(==)
+            :(@test isequal($(expr.args[2]), $(expr.args[3])))
+        else
+            :(@test !isequal($(expr.args[2]), $(expr.args[3])))
+        end,
+    )
+end
+
+macro eqsym(expr)
+    @assert expr.head == :call && expr.args[1] in [:(==), :(!=)]
+    return esc(
+        if expr.args[1] == :(==)
+            :(isequal($(expr.args[2]), $(expr.args[3])))
+        else
+            :(!isequal($(expr.args[2]), $(expr.args[3])))
+        end,
+    )
+end
+
+is_identity(A::Matrix{Num}) = (@eqsym A == Matrix{Num}(LinearAlgebra.I, size(A)...))
+hasnan(x::Matrix{Num}) = any(my_isnan, unwrap.(x))
+my_isnan(x) = isnan(x)
+my_isnan(x::BasicSymbolic) = false
