@@ -72,5 +72,4 @@ hasnan(x::Matrix{Num}) = any(my_isnan, unwrap.(x))
 my_isnan(x) = isnan(x)
 my_isnan(x::BasicSymbolic) = false
 
-
 end
