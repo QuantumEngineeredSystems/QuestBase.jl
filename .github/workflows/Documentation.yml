@@ -5,10 +5,10 @@ on:
     tags:
       - '*'
     branches:
-      - 'master'
+      - 'main'
   pull_request:
     branches:
-      - 'master'
+      - 'main'
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
@@ -16,6 +16,7 @@ permissions:
   pages: write
   id-token: write
   statuses: write
+  pull-requests: read  # Required when using `push_preview=true`
         
 # Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
 # However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
