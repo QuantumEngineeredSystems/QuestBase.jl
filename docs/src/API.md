@@ -1,6 +1,6 @@
 # API
 
-## Symbolic Utilies
+## Symbolic Utilities
 
 ```@docs
 
