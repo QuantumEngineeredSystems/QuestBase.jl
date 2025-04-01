@@ -9,12 +9,13 @@ makedocs(;
     sitename="QuestBase.jl",
     authors="Quest group",
     modules=QuestBase,
-    format=Documenter.HTML(
-    canonical = "https://quantumengineeredsystems.github.io/QuestBase.jl/stable/"),
-    pages = pages,
-    clean = true,
-    linkcheck = true,
-    warnonly = :missing_docs,
+    format=Documenter.HTML(;
+        canonical="https://quantumengineeredsystems.github.io/QuestBase.jl/stable/"
+    ),
+    pages=pages,
+    clean=true,
+    linkcheck=true,
+    warnonly=:missing_docs,
     draft=!CI,
     doctest=false,  # We test it in the CI, no need to run it here
 )
