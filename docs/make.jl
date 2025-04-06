@@ -16,16 +16,16 @@ makedocs(;
     clean=true,
     linkcheck=true,
     warnonly=:missing_docs,
-    draft=!CI,
+    draft=(!CI),
     doctest=false,  # We test it in the CI, no need to run it here
 )
 
 if CI
     deploydocs(;
         repo="github.com/QuantumEngineeredSystems/QuestBase.jl",
-        # devbranch="main",
-        # target="build",
-        # branch="gh-pages",
+        devbranch="main",
+        target="build",
+        branch="gh-pages",
         push_preview=true,
     )
 end
