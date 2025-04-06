@@ -23,9 +23,9 @@ makedocs(;
 if CI
     deploydocs(;
         repo="github.com/QuantumEngineeredSystems/QuestBase.jl",
-        # devbranch="main",
-        # target="build",
-        # branch="gh-pages",
+        devbranch="main",
+        target="build",
+        branch="gh-pages",
         push_preview=true,
     )
 end
