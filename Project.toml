@@ -21,7 +21,7 @@ Test = "1.10"
 OrderedCollections = "1.8"
 Aqua = "0.8.11"
 ExplicitImports = "1.11"
-JET = "0.9.18"
+JET = "0.9.18, 0.10.0"
 CheckConcreteStructs = "0.1.0"
 
 [extras]
