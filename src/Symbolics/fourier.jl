@@ -109,7 +109,6 @@ function _fourier_term(x, ω, t, f)
     return Symbolics.expand(ft)
 end
 
-
 """
     trig_to_exp(x::Num)
 
