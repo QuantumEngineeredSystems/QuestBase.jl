@@ -1,5 +1,26 @@
+"""
+    trig_reduce(x)
 
-"Expand all sin/cos powers in `x`."
+Simplify trigonometric expressions by converting between exponential and trigonometric forms.
+This function performs the following steps:
+1. Combines fractions with common denominators
+2. Expands all brackets
+3. Converts trigonometric functions to exponentials
+4. Expands products of exponentials
+5. Simplifies exponential products
+6. Converts back to trigonometric form
+7. Simplifies complex expressions
+
+Returns the simplified expression as a `Num` type.
+"""
+
+"""
+    is_trig(f::Num)
+
+Check if the given expression `f` is a trigonometric function (sine or cosine).
+
+Returns `true` if `f` is either `sin` or `cos`, `false` otherwise.
+"""
 function trig_reduce(x)
     x = add_div(x) # a/b + c/d = (ad + bc)/bd
     x = expand(x) # open all brackets
@@ -19,8 +40,24 @@ function is_trig(f::Num)
 end
 
 """
-$(TYPEDSIGNATURES)
-Returns the coefficient of cos(ωt) in `x`.
+    fourier_cos_term(x, ω, t)
+
+Extract the coefficient of cos(ωt) from the expression `x`.
+Used in Fourier analysis to find the cosine components of a periodic function.
+
+# Arguments
+- `x`: The expression to analyze
+- `ω`: The angular frequency
+- `t`: The time variable
+"""
+
+"""
+    add_div(x)
+
+Simplify fractions by combining terms with common denominators.
+Transforms expressions of the form a/b + c/d into (ad + bc)/bd.
+
+Returns the simplified fraction as a `Num` type.
 """
 function fourier_cos_term(x, ω, t)
     return _fourier_term(x, ω, t, cos)
@@ -30,13 +67,34 @@ end
 add_div(x) = wrap(Postwalk(add_with_div; maketerm=frac_maketerm)(unwrap(x)))
 
 """
-$(TYPEDSIGNATURES)
-Returns the coefficient of sin(ωt) in `x`.
+    fourier_sin_term(x, ω, t)
+
+Extract the coefficient of sin(ωt) from the expression `x`.
+Used in Fourier analysis to find the sine components of a periodic function.
+
+# Arguments
+- `x`: The expression to analyze
+- `ω`: The angular frequency
+- `t`: The time variable
 """
 function fourier_sin_term(x, ω, t)
     return _fourier_term(x, ω, t, sin)
 end
 
+"""
+    _fourier_term(x::Equation, ω, t, f)
+    _fourier_term(x, ω, t, f)
+
+Internal function to extract Fourier coefficients from expressions.
+Handles both equations and regular expressions, returning the coefficient
+of the specified trigonometric function f(ωt).
+
+# Arguments
+- `x`: The expression or equation to analyze
+- `ω`: The angular frequency
+- `t`: The time variable
+- `f`: The trigonometric function (sin or cos)
+"""
 function _fourier_term(x::Equation, ω, t, f)
     return Equation(_fourier_term(x.lhs, ω, t, f), _fourier_term(x.rhs, ω, t, f))
 end
@@ -51,7 +109,14 @@ function _fourier_term(x, ω, t, f)
     return Symbolics.expand(ft)
 end
 
-"Convert all sin/cos terms in `x` into exponentials."
+"""
+    trig_to_exp(x::Num)
+
+Convert all trigonometric terms (sin, cos) in expression `x` to their exponential form
+using Euler's formula: ``\\exp(ix) = \\cos(x) + i*\\sin(x)``.
+
+Returns the converted expression as a `Num` type.
+"""
 function trig_to_exp(x::Num)
     all_terms = get_all_terms(x)
     trigs = filter(z -> is_trig(z), all_terms)
@@ -82,6 +147,22 @@ end
 convert_to_Num(x::Complex{Num})::Num = Num(first(x.re.val.arguments))
 convert_to_Num(x::Num)::Num = x
 
+"""
+    exp_to_trig(x::BasicSymbolic)
+    exp_to_trig(x)
+    exp_to_trig(x::Num)
+    exp_to_trig(x::Complex{Num})
+
+Convert exponential expressions to their trigonometric form using
+the inverse of Euler's formula:
+``\\cos(x) = (\\exp(ix) + \\exp(-ix))/2``
+and
+``\\sin(x) = (\\exp(ix) - \\exp(-ix))/(2i)``.
+
+Handles various input types including basic symbolic expressions,
+complex numbers, and `Num` types. Standardizes the sign of
+trigonometric arguments for consistent simplification.
+"""
 function exp_to_trig(x::BasicSymbolic)
     if isadd(x) || isdiv(x) || ismul(x)
         return _apply_termwise(exp_to_trig, x)
