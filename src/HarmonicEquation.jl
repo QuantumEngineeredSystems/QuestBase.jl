@@ -149,6 +149,7 @@ function rearrange!(eom::HarmonicEquation, new_rhs::Vector{Num})
     return nothing
 end
 
+"Rearrange an equation system such that the field equations is equal to the vector specified in new_lhs"
 function rearrange(eom::HarmonicEquation, new_rhs::Vector{Num})
     new_eom = deepcopy(eom)
     rearrange!(new_eom, new_rhs)
