@@ -1,7 +1,17 @@
 # test/test_HarmonicVariable.jl
 using Test
 using Symbolics
-using QuestBase: declare_variable, declare_variables, substitute_all, var_name, HarmonicVariable, _show_ansatz, _coordinate_transform, @eqtest, _create_harmonic_variable, get_variables_nums
+using QuestBase:
+    declare_variable,
+    declare_variables,
+    substitute_all,
+    var_name,
+    HarmonicVariable,
+    _show_ansatz,
+    _coordinate_transform,
+    @eqtest,
+    _create_harmonic_variable,
+    get_variables_nums
 
 # Setup
 @variables t T
