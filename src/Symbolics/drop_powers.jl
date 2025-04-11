@@ -38,7 +38,8 @@ function drop_powers(eqs::Vector{Equation}, var::Vector{Num}, deg::Int)
     ]
 end
 drop_powers(expr, var::Num, deg::Int) = drop_powers(expr, [var], deg)
-drop_powers(x, vars, deg::Int) = drop_powers(Num(x), vars, deg)
+drop_powers(x, vars, deg::Int) = drop_powers(wrap(x), vars, deg)
+# ^ TODO: in principle `drop_powers` should get in BasicSymbolic and have a fallback for Num
 
 "Return the highest power of `y` occurring in the term `x`."
 function max_power(x::Num, y::Num)
@@ -49,7 +50,7 @@ end
 
 max_power(x::Vector{Num}, y::Num) = maximum(max_power.(x, y))
 max_power(x::Complex, y::Num) = maximum(max_power.([x.re, x.im], y))
-max_power(x, t) = max_power(Num(x), Num(t))
+max_power(x, t) = max_power(wrap(x), wrap(t))
 
 "Return the power of `y` in the term `x`"
 function power_of(x::Num, y::Num)

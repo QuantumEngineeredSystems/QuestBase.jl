@@ -144,6 +144,7 @@ function trig_to_exp(x::Num)
     result = Symbolics.substitute(x, Dict(rules))
     return convert_to_Num(result)
 end
+trig_to_exp(x::Complex{Num}) = trig_to_exp(x.re) + im * trig_to_exp(x.im)
 convert_to_Num(x::Complex{Num})::Num = Num(first(x.re.val.arguments))
 convert_to_Num(x::Num)::Num = x
 

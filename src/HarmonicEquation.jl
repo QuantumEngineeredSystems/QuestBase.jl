@@ -175,7 +175,13 @@ function is_rearranged(eom::HarmonicEquation)
     return HB_bool || hopf_bool || MF_bool
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+(Re)-declare the variables of `eom` in module scope.
+"""
 function declare_variables(eom::HarmonicEquation)
     vars_orig = get_variables(eom)
     return declare_variable.(var_name.(vars_orig))
 end
+# TODO should this be the variable with independent_variable or without independent_variable?

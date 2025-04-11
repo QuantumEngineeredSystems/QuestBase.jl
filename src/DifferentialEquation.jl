@@ -34,6 +34,9 @@ mutable struct DifferentialEquation
 
     # uses the above constructor if no harmonics defined
     function DifferentialEquation(eqs::Vector{Equation}, vars::Vector{Num})
+        if length(eqs) != length(vars)
+            throw(ArgumentError("The number of equations and variables are not the same."))
+        end
         return DifferentialEquation(OrderedDict(zip(vars, eqs)))
     end
 
@@ -187,6 +190,9 @@ function rearrange!(eom::DifferentialEquation, new_lhs::Vector{Num})
     eom.equations = OrderedDict(zip(get_variables_nums(new_lhs), new_lhs .~ soln))
     return nothing
 end
+function get_variables_nums(vars::Vector{Num})
+    unique(flatten([Num.(get_variables(x)) for x in vars]))
+end # TODO: remove this function or at least better names
 
 """
 $(TYPEDSIGNATURES)

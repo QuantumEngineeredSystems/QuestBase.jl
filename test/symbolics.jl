@@ -1,6 +1,6 @@
 using Test
 using Symbolics
-using SymbolicUtils: Fixpoint, Prewalk, PassThrough
+using SymbolicUtils: Fixpoint, Prewalk, PassThrough, BasicSymbolic
 
 using QuestBase: @eqtest
 
@@ -39,11 +39,23 @@ end
 
     @eqtest max_power(a^2 + b, a) == 2
     @eqtest max_power(a * ((a + b)^4)^2 + a, a) == 9
+    @eqtest max_power([a * ((a + b)^4)^2 + a, a^2], a) == 9
+    @eqtest max_power(a + im*a^2, a) == 2
 
     @eqtest drop_powers(a^2 + b, a, 1) == b
     @eqtest drop_powers((a + b)^2, a, 1) == b^2
     @eqtest drop_powers((a + b)^2, [a, b], 1) == 0
     @eqtest drop_powers((a + b)^3 + (a + b)^5, [a, b], 4) == expand((a + b)^3)
+    a^2 + a ~ a
+    eq = drop_powers(a^2 + a ~ a, a, 2)
+    @eqtest [eq.lhs, eq.rhs] == [a, a]
+    # eq = drop_powers(a^2 + a ~ b, [a, b], 2) # broken
+    @eqtest [eq.lhs, eq.rhs] == [a, a]
+    eq = drop_powers(a^2 + a + b ~ a, a, 2)
+    @test string(eq.rhs) == "a" broken=true
+
+    @eqtest drop_powers([a^2 + a + b, b], a, 2) == [a + b, b]
+    @eqtest drop_powers([a^2 + a + b, b], [a, b], 2) == [a + b, b]
 end
 
 @testset "trig_to_exp and trig_to_exp" begin
@@ -52,10 +64,16 @@ end
     cos_euler(x) = (exp(im * x) + exp(-im * x)) / 2
     sin_euler(x) = (exp(im * x) - exp(-im * x)) / (2 * im)
 
+    # automatic conversion between trig and exp form
     trigs = [cos(f * t), sin(f * t)]
     for (i, trig) in pairs(trigs)
         z = trig_to_exp(trig)
         @eqtest expand(exp_to_trig(z)) == trig
+    end
+    trigs′ = [cos_euler(f * t), sin_euler(f * t)]
+    for (i, trig) in pairs(trigs′)
+        z = trig_to_exp(trig)
+        @eqtest expand(exp_to_trig(z)) == trigs[i]
     end
 end
 
@@ -137,11 +155,12 @@ end
 @testset "simplify_complex" begin
     using QuestBase: simplify_complex
     @variables a, b, c
-    z = Complex{Num}(a)
-    @test simplify_complex(z) isa Num
+    for z in Complex{Num}[a, a * b, a / b]
+        @test simplify_complex(z).val isa BasicSymbolic{Real}
+    end
 
     z = Complex{Num}(1 + 0 * im)
-    @test simplify_complex(z) isa Num
+    @test simplify_complex(z).val isa Int64
 end
 
 @testset "get_all_terms" begin
@@ -154,12 +173,14 @@ end
     @eqtest get_all_terms(a^2 + b^2 + c^2) == [b^2, a^2, c^2]
     @eqtest get_all_terms(a^2 / b^2) == [a^2, b^2]
     @eqtest get_all_terms(2 * b^2) == [2, b^2]
+    @eqtest get_all_terms(2 * b^2 ~ a) == [2, b^2, a]
 end
 
 @testset "get_independent" begin
     using QuestBase: get_independent
     @variables a, b, c, t
 
+    @test get_independent(a + b + c, t) isa Num
     @eqtest get_independent(a + b + c, t) == a + b + c
     @eqtest get_independent(a * b * c, t) == a * b * c
     @eqtest get_independent(a / b, t) == a / b
@@ -168,13 +189,17 @@ end
     @eqtest get_independent(2 * b^2, t) == 2 * b^2
     @eqtest get_independent(cos(t), t) == 0
     @eqtest get_independent(cos(t)^2 + 5, t) == 5
+    @eqtest get_independent(a + im * b, t) == a + im * b
+    @eqtest get_independent(a + im * b + cos(t)^2 + 5, t) == 5 + a + im * b
 end
 
 @testset "expand_fraction" begin
     using QuestBase: expand_fraction
-    @variables a, b, c
+    @variables a, b, c, d
 
     @eqtest expand_fraction((a + b) / c) == a / c + b / c
+    @test string.(expand_fraction(d * (a + b) / c)) == "d*a /c + d*b / c + d / c" broken =
+        true
 end
 @testset "count_derivatives" begin
     using QuestBase: count_derivatives, d
@@ -183,4 +208,19 @@ end
     @test count_derivatives(d(x, t)) == 1
     @test count_derivatives(d(d(x, t), t)) == 2
     @test_throws ErrorException count_derivatives(d(d(5 * x, t), t))
+end
+
+@testset "substitute_all" begin
+    using QuestBase: substitute_all
+    @variables a, b, c, d, e, f, g, h
+
+    pairs = (a => b, c => d, e => f, g => h)
+    rules = Dict(a => b, c => d, e => f, g => h)
+
+    @eqtest substitute_all(a + b + c + d + e + f + g + h, rules) ==
+        2 * b + 2 * d + 2 * f + 2 * h
+    @eqtest substitute_all(a + b, a => b) == 2 * b
+    @eqtest substitute_all(a * b * c * d * e * f * g * h, rules) == b^2 * d^2 * f^2 * h^2
+    @eqtest substitute_all([a, c, e], rules) == [b, d, f]
+    @eqtest substitute_all(a + b * im, rules) == b + b * im
 end
