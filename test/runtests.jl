@@ -17,6 +17,10 @@ end
     include("DifferentialEquations.jl")
 end
 
+@testset "HarmonicVariable" begin
+    include("HarmonicVariable.jl")
+end
+
 @testset "HarmonicEquation" begin
     include("HarmonicEquation.jl")
 end
