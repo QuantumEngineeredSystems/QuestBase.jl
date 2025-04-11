@@ -12,3 +12,7 @@ end
 @testset "Symbolics customised" begin
     include("symbolics.jl")
 end
+
+@testset "HarmonicEquation" begin
+    include("HarmonicEquation.jl")
+end

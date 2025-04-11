@@ -113,7 +113,7 @@ function d(f::Num, x::Num, deg=1)::Num
 end
 d(funcs::Vector{Num}, x::Num, deg=1) = Num[d(f, x, deg) for f in funcs]
 
-"Declare a variable in the the currently active namespace"
+"Declare a variable in the the currently active Module namespace"
 function declare_variable(name::String)
     var_sym = Symbol(name)
     @eval($(var_sym) = first(Symbolics.@variables $var_sym))
@@ -122,7 +122,7 @@ end
 
 declare_variable(x::Num) = declare_variable(string(x))
 
-"Declare a variable that is a function of another variable in the the current namespace"
+"Declare a variable that is a function of another variable in the Module namespace"
 function declare_variable(name::String, independent_variable::Num)
     # independent_variable = declare_variable(independent_variable) convert string into Num
     var_sym = Symbol(name)
