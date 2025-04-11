@@ -54,8 +54,8 @@ end
     eq = drop_powers(a^2 + a + b ~ a, a, 2)
     @test string(eq.rhs) == "a" broken=true
 
-    @eqtest drop_powers([a^2 + a + b, b], a, 2) == [a + b , b]
-    @eqtest drop_powers([a^2 + a + b, b], [a, b], 2) == [a + b , b]
+    @eqtest drop_powers([a^2 + a + b, b], a, 2) == [a + b, b]
+    @eqtest drop_powers([a^2 + a + b, b], [a, b], 2) == [a + b, b]
 end
 
 @testset "trig_to_exp and trig_to_exp" begin
