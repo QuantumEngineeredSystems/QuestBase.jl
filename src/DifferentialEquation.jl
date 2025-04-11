@@ -34,6 +34,9 @@ mutable struct DifferentialEquation
 
     # uses the above constructor if no harmonics defined
     function DifferentialEquation(eqs::Vector{Equation}, vars::Vector{Num})
+        if length(eqs) != length(vars)
+            throw(ArgumentError("The number of equations and variables are not the same."))
+        end
         return DifferentialEquation(OrderedDict(zip(vars, eqs)))
     end
 
