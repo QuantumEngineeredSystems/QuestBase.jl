@@ -56,12 +56,7 @@ function substitute_all(x::Subtype, rules::Dict; include_derivatives=true)
     end
     return substitute(x, rules)
 end
-"Variable substitution - dictionary"
-function substitute_all(dict::Dict, rules::Dict)::Dict
-    new_keys = substitute_all.(keys(dict), rules)
-    new_values = substitute_all.(values(dict), rules)
-    return Dict(zip(new_keys, new_values))
-end
+
 Collections = Union{Dict,Pair,Vector,OrderedDict}
 substitute_all(v::AbstractArray, rules) = [substitute_all(x, rules) for x in v]
 substitute_all(x::Subtype, rules::Collections) = substitute_all(x, Dict(rules))
@@ -69,7 +64,7 @@ function substitute_all(x::Complex{Num}, rules::Collections)
     return substitute_all(x.re, rules) + im * substitute_all(x.im, rules)
 end
 
-get_independent(x::Num, t::Num) = get_independent(x.val, t)
+get_independent(x::Num, t::Num)::Num = wrap(get_independent(x.val, t))
 function get_independent(x::Complex{Num}, t::Num)
     return get_independent(x.re, t) + im * get_independent(x.im, t)
 end
