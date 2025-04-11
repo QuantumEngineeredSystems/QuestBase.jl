@@ -52,10 +52,16 @@ end
     cos_euler(x) = (exp(im * x) + exp(-im * x)) / 2
     sin_euler(x) = (exp(im * x) - exp(-im * x)) / (2 * im)
 
+    # automatic conversion between trig and exp form
     trigs = [cos(f * t), sin(f * t)]
     for (i, trig) in pairs(trigs)
         z = trig_to_exp(trig)
         @eqtest expand(exp_to_trig(z)) == trig
+    end
+    trigs′ = [cos_euler(f * t), sin_euler(f * t)]
+    for (i, trig) in pairs(trigs′)
+        z = trig_to_exp(trig)
+        @eqtest expand(exp_to_trig(z)) == trigs[i]
     end
 end
 
