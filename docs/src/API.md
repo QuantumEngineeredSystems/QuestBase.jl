@@ -42,12 +42,6 @@ QuestBase.rearrange
 QuestBase.is_rearranged
 ```
 
-## Steady state methods
-
-```@docs
-QuestBase.HarmonicBalanceMethod
-```
-
 ## Symbolic Utilities
 
 QuestBase contains a number of symbolic utilities to help with the symbolic manipulation of the equations of motion. These are function on the top of the Symbolics.jl package and are considered **non-public**.

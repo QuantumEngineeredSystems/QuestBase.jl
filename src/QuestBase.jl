@@ -44,6 +44,5 @@ include("DifferentialEquation.jl")
 include("Variables.jl")
 include("HarmonicVariable.jl")
 include("HarmonicEquation.jl")
-include("abstracttypes.jl")
 
 end
