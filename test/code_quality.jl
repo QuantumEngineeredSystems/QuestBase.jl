@@ -22,7 +22,5 @@ end
     @test check_no_stale_explicit_imports(QuestBase) == nothing
     @test check_all_explicit_imports_via_owners(QuestBase) == nothing
     Aqua.test_ambiguities([QuestBase])
-    Aqua.test_all(
-        QuestBase;
-    )
+    Aqua.test_all(QuestBase;)
 end
