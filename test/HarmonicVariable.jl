@@ -75,5 +75,5 @@ end
 
     # Test variable substitution
     new_hv = substitute_all(hv, Dict(ω => new_var))
-    @test isequal(new_hv.ω,new_var)
+    @test isequal(new_hv.ω, new_var)
 end
