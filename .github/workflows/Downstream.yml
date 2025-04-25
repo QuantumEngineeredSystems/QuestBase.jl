@@ -1,13 +1,24 @@
 name: IntegrationTest
+
 on:
   push:
-    tags:
-      - '*'
     branches:
       - 'main'
   pull_request:
     branches:
       - 'main'
+    paths:
+      - '.github/workflows/Downstream.yml'
+      - 'src/**'
+      - 'ext/**'
+      - 'test/**'
+      - 'Project.toml'
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+
 concurrency:
   # Skip intermediate builds: always.
   # Cancel intermediate builds: only if it is a pull request build.
