@@ -69,7 +69,11 @@ end
     result = substitute_all(eq, rules)
     @eqtest result == new_var^2 + ω
 
-    # Test variable substitution
+    # Test number substitution
     new_hv = substitute_all(hv, Dict(ω => 2))
     @test new_hv.ω == 2
+
+    # Test variable substitution
+    new_hv = substitute_all(hv, Dict(ω => new_var))
+    @test isequal(new_hv.ω,new_var)
 end
