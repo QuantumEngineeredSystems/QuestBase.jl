@@ -51,7 +51,7 @@ function substitute_all(x::Subtype, rules::Dict; include_derivatives=true)
     if include_derivatives
         drules = Pair[]
         for var in keys(rules)
-            if !isa(rules[var], Union{AbstractFloat, Integer})
+            if !isa(rules[var], Union{AbstractFloat,Integer})
                 pair = Differential(var) => Differential(rules[var])
                 push!(drules, pair)
             end
