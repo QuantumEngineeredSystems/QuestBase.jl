@@ -18,6 +18,13 @@ on:
       - reopened
       - synchronize
       - ready_for_review
+
+concurrency:
+  # Skip intermediate builds: always.
+  # Cancel intermediate builds: only if it is a pull request build.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+  
 jobs:
   test:
     name: ${{ matrix.package.repo }}/${{ matrix.julia-version }}
