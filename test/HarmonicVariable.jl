@@ -73,3 +73,13 @@ end
     new_hv = substitute_all(hv, Dict(ω => 2))
     @test new_hv.ω == 2
 end
+# hv = HarmonicVariable(nat_var, "test_name", "u", ω, nat_var)
+# rules = Dict(ω => 2)
+# new_hv = substitute_all(hv, rules)
+# sym, freq = hv.symbol, hv.ω
+# substitute_all(sym, rules)
+# rules = merge(
+#     rules,
+#     Dict([Differential(var) => Differential(rules[var]) for var in keys(rules)]),
+# )
+# sym
