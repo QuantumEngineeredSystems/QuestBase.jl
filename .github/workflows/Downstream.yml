@@ -1,10 +1,23 @@
 name: IntegrationTest
+
 on:
   push:
-    branches: [main]
-    tags: [v*]
+    branches:
+      - 'main'
   pull_request:
-
+    branches:
+      - 'main'
+    paths:
+      - '.github/workflows/Tests.yml'
+      - 'src/**'
+      - 'ext/**'
+      - 'test/**'
+      - 'Project.toml'
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
 jobs:
   test:
     name: ${{ matrix.package.repo }}/${{ matrix.julia-version }}
