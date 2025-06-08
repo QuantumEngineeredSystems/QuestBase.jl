@@ -29,12 +29,14 @@ function trig_reduce(x)
     x = simplify_exp_products(x) # simplify products of exps
     x = exp_to_trig(x)
     x = Num(simplify_complex(expand(x)))
-    return x# simplify_fractions(x)# (a*c^2 + b*c)/c^2 = (a*c + b)/c
+    return x # simplify_fractions(x)# (a*c^2 + b*c)/c^2 = (a*c + b)/c
 end
 
 "Return true if `f` is a sin or cos."
-function is_trig(f::Num)
-    f = ispow(f.val) ? f.val.base : f.val
+is_trig(f::Num) = is_trig(f.val)
+is_trig(f) = false
+function is_trig(f::BasicSymbolic)
+    f = ispow(f) ? f.base : f
     isterm(f) && SymbolicUtils.operation(f) ∈ [cos, sin] && return true
     return false
 end
@@ -147,6 +149,35 @@ end
 trig_to_exp(x::Complex{Num}) = trig_to_exp(x.re) + im * trig_to_exp(x.im)
 convert_to_Num(x::Complex{Num})::Num = Num(first(x.re.val.arguments))
 convert_to_Num(x::Num)::Num = x
+
+"""
+    trig_to_exp(x::BasicSymbolic)
+
+Convert all trigonometric terms (sin, cos) in expression `x` to their exponential form
+using Euler's formula: ``\\exp(ix) = \\cos(x) + i*\\sin(x)``.
+"""
+function trig_to_exp(x::BasicSymbolic)
+    all_terms = get_all_terms(x)
+    trigs = filter(z -> is_trig(z), all_terms)
+
+    rules = []
+    for trig in trigs
+        is_pow = ispow(trig) # trig is either a trig or a power of a trig
+        power = is_pow ? trig.exp : 1
+        arg = is_pow ? arguments(trig.base)[1] : arguments(trig)[1]
+        type = is_pow ? operation(trig.base) : operation(trig)
+
+        if type == cos
+            term = (exp(im * arg) + exp(-im * arg))^power * (1 // 2)^power
+        elseif type == sin
+            term =
+                (1 * im^power) * ((exp(-im * arg) - exp(im * arg)))^power * (1 // 2)^power
+        end
+
+        append!(rules, [trig => term])
+    end
+    return Symbolics.substitute(x, Dict(rules))
+end
 
 """
     exp_to_trig(x::BasicSymbolic)

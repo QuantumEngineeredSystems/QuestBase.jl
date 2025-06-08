@@ -88,19 +88,20 @@ function get_independent(x::BasicSymbolic, t::Num)
 end
 
 "Return all the terms contained in `x`"
-get_all_terms(x::Num) = unique(_get_all_terms(Symbolics.expand(x).val))
+get_all_terms(x::Num) = Num.(unique(_get_all_terms(Symbolics.expand(x).val)))
+get_all_terms(x::BasicSymbolic) = unique(_get_all_terms(Symbolics.expand(x)))
 function get_all_terms(x::Equation)
     return unique(cat(get_all_terms(Num(x.lhs)), get_all_terms(Num(x.rhs)); dims=1))
 end
 function _get_all_terms(x::BasicSymbolic)
     @compactified x::BasicSymbolic begin
         Add => vcat([_get_all_terms(term) for term in SymbolicUtils.arguments(x)]...)
-        Mul => Num.(SymbolicUtils.arguments(x))
-        Div => Num.([_get_all_terms(x.num)..., _get_all_terms(x.den)...])
-        _   => Num(x)
+        Mul => SymbolicUtils.arguments(x)
+        Div => [_get_all_terms(x.num)..., _get_all_terms(x.den)...]
+        _   => [x]
     end
 end
-_get_all_terms(x) = Num(x)
+_get_all_terms(x) = x
 
 function is_harmonic(x::Num, t::Num)::Bool
     all_terms = get_all_terms(x)

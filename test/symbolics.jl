@@ -40,7 +40,7 @@ end
     @eqtest max_power(a^2 + b, a) == 2
     @eqtest max_power(a * ((a + b)^4)^2 + a, a) == 9
     @eqtest max_power([a * ((a + b)^4)^2 + a, a^2], a) == 9
-    @eqtest max_power(a + im*a^2, a) == 2
+    @eqtest max_power(a + im * a^2, a) == 2
 
     @eqtest drop_powers(a^2 + b, a, 1) == b
     @eqtest drop_powers((a + b)^2, a, 1) == b^2
@@ -52,7 +52,7 @@ end
     # eq = drop_powers(a^2 + a ~ b, [a, b], 2) # broken
     @eqtest [eq.lhs, eq.rhs] == [a, a]
     eq = drop_powers(a^2 + a + b ~ a, a, 2)
-    @test string(eq.rhs) == "a" broken=true
+    @test string(eq.rhs) == "a" broken = true
 
     @eqtest drop_powers([a^2 + a + b, b], a, 2) == [a + b, b]
     @eqtest drop_powers([a^2 + a + b, b], [a, b], 2) == [a + b, b]
@@ -60,21 +60,41 @@ end
 
 @testset "trig_to_exp and trig_to_exp" begin
     using QuestBase: expand_all, trig_to_exp, exp_to_trig
-    @variables f t
-    cos_euler(x) = (exp(im * x) + exp(-im * x)) / 2
-    sin_euler(x) = (exp(im * x) - exp(-im * x)) / (2 * im)
+    @testset "Num" begin
+        @variables f t
+        cos_euler(x) = (exp(im * x) + exp(-im * x)) / 2
+        sin_euler(x) = (exp(im * x) - exp(-im * x)) / (2 * im)
 
-    # automatic conversion between trig and exp form
-    trigs = [cos(f * t), sin(f * t)]
-    for (i, trig) in pairs(trigs)
-        z = trig_to_exp(trig)
-        @eqtest expand(exp_to_trig(z)) == trig
+        # automatic conversion between trig and exp form
+        trigs = [cos(f * t), sin(f * t)]
+        for (i, trig) in pairs(trigs)
+            z = trig_to_exp(trig)
+            @eqtest expand(exp_to_trig(z)) == trig
+        end
+        trigs′ = [cos_euler(f * t), sin_euler(f * t)]
+        for (i, trig) in pairs(trigs′)
+            z = trig_to_exp(trig)
+            @eqtest expand(exp_to_trig(z)) == trigs[i]
+        end
     end
-    trigs′ = [cos_euler(f * t), sin_euler(f * t)]
-    for (i, trig) in pairs(trigs′)
-        z = trig_to_exp(trig)
-        @eqtest expand(exp_to_trig(z)) == trigs[i]
-    end
+
+    # @testset "BasicSymbolic" begin
+    #     @syms f t
+    #     cos_euler(x) = (exp(im * x) + exp(-im * x)) / 2
+    #     sin_euler(x) = (exp(im * x) - exp(-im * x)) / (2 * im)
+
+    #     # automatic conversion between trig and exp form
+    #     trigs = [cos(f * t), sin(f * t)]
+    #     for (i, trig) in pairs(trigs)
+    #         z = trig_to_exp(trig)
+    #         @eqtest expand(exp_to_trig(z)) == trig
+    #     end
+    #     trigs′ = [cos_euler(f * t), sin_euler(f * t)]
+    #     for (i, trig) in pairs(trigs′)
+    #         z = trig_to_exp(trig)
+    #         @eqtest expand(exp_to_trig(z)) == trigs[i]
+    #     end
+    # end
 end
 
 @testset "harmonic" begin
