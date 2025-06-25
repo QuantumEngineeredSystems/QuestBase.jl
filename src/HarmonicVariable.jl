@@ -19,19 +19,30 @@ mutable struct HarmonicVariable
     natural_variable::Num
 end
 
+function HarmonicVariable(symbol::Num)
+    return HarmonicVariable(symbol, "", "", Num(1), Num(0))
+end
+
 function Base.show(io::IO, hv::HarmonicVariable)
-    return println(
-        io,
-        "Harmonic variable ",
-        string.(hv.symbol) * " for harmonic ",
-        string(hv.ω),
-        " of ",
-        string(hv.natural_variable),
-    )
+    if isempty(hv.type)
+        s = "Harmonic variable " * string.(hv.symbol)
+    else
+        s =
+            "Harmonic variable " *
+            string.(hv.symbol) *
+            " for harmonic " *
+            string(hv.ω) *
+            " of " *
+            string(hv.natural_variable)
+    end
+    return println(io, s)
 end
 
 """Gives the relation between `var` and the underlying natural variable."""
 function _show_ansatz(var::HarmonicVariable)
+    if isempty(var.type)
+        return string(var.symbol)
+    end
     t = var.natural_variable.val.arguments
     t = length(t) == 1 ? string(t[1]) : error("more than 1 independent variable")
     ω = string(var.ω)
@@ -99,6 +110,5 @@ end
 "Returns the symbols of a `HarmonicVariable`."
 Symbolics.get_variables(var::HarmonicVariable)::Num = Num(first(get_variables(var.symbol)))
 
-Base.isequal(v1::HarmonicVariable, v2::HarmonicVariable)::Bool = isequal(
-    v1.symbol, v2.symbol
-)
+Base.isequal(v1::HarmonicVariable, v2::HarmonicVariable)::Bool =
+    isequal(v1.symbol, v2.symbol)
