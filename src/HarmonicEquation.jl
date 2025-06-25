@@ -137,11 +137,10 @@ function _remove_brackets(eom::HarmonicEquation)
     return substitute_all(equations_lhs, variable_rules)
 end
 
-function _remove_brackets(eom::Vector{Num}, vars::Vector{Num})
+function _remove_brackets(eqs::Vector{Num}, vars::Vector{Num})
     vars_ = _remove_brackets.(vars)
     variable_rules = Dict(zip(vars, vars_))
-    equations_lhs = Num.(getfield.(eom, :lhs) - getfield.(eom, :rhs))
-    return substitute_all(equations_lhs, variable_rules), vars_
+    return substitute_all(eqs, variable_rules), vars_
 end
 
 """
