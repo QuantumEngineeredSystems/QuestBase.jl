@@ -137,6 +137,13 @@ function _remove_brackets(eom::HarmonicEquation)
     return substitute_all(equations_lhs, variable_rules)
 end
 
+function _remove_brackets(eom::Equation, vars::Num)
+    # remove brackets from the variables in the equation
+    variable_rules = [var => _remove_brackets(var) for var in vars]
+    lhs = Num.(getfield(eom, :lhs) - getfield(eom, :rhs))
+    return substitute_all(lhs, variable_rules)
+end
+
 """
 $(TYPEDSIGNATURES)
 Rearrange `eom` to the standard form, such that the derivatives of the variables are on one side.
