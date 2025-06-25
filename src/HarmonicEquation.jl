@@ -137,6 +137,12 @@ function _remove_brackets(eom::HarmonicEquation)
     return substitute_all(equations_lhs, variable_rules)
 end
 
+function _remove_brackets(eqs::Vector{Num}, vars::Vector{Num})
+    vars_ = _remove_brackets.(vars)
+    variable_rules = Dict(zip(vars, vars_))
+    return substitute_all(eqs, variable_rules), vars_
+end
+
 """
 $(TYPEDSIGNATURES)
 Rearrange `eom` to the standard form, such that the derivatives of the variables are on one side.
