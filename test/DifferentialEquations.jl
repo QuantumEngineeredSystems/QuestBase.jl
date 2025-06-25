@@ -42,6 +42,11 @@ using QuestBase:
     diff_eq3 = DifferentialEquation(expr, x)
     @test length(diff_eq3.equations) == 1
     @test diff_eq3.equations[x].rhs == 0
+
+    # Test empty constructor
+    diff = DifferentialEquation()
+    @test isempty(diff.equations)
+    @test isempty(diff.harmonics)
 end
 
 @testset "Helper Functions" begin

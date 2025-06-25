@@ -29,8 +29,6 @@ jobs:
   test:
     name: ${{ matrix.package.repo }}/${{ matrix.julia-version }}
     runs-on: ${{ matrix.os }}
-    env:
-      GROUP: ${{ matrix.package.group }}
     strategy:
       fail-fast: false
       matrix:

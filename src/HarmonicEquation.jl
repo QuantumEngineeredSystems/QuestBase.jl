@@ -19,26 +19,49 @@ mutable struct HarmonicEquation
     jacobian::Matrix{Num}
 
     # use a self-referential constructor with _parameters
-    function HarmonicEquation(equations, variables, nat_eq)
+    function HarmonicEquation(
+        equations::Vector{Equation},
+        variables::Vector{HarmonicVariable},
+        nat_eq::DifferentialEquation,
+    )
         return (
-            x=new(
+            x = new(
                 equations,
                 variables,
                 Num[],
                 nat_eq,
                 dummy_symbolic_Jacobian(length(variables)),
             );
-            x.parameters=_parameters(x);
+            x.parameters = _parameters(x);
             x
         )
     end
-    function HarmonicEquation(equations, variables, parameters, natural_equation)
+    function HarmonicEquation(
+        equations::Vector{Equation},
+        variables::Vector{HarmonicVariable},
+        parameters::Vector{Num},
+        natural_equation::DifferentialEquation,
+    )
         return new(
             equations,
             variables,
             parameters,
             natural_equation,
             dummy_symbolic_Jacobian(length(variables)),
+        )
+    end
+    function HarmonicEquation(
+        equations::Vector{Equation},
+        variables::Vector{HarmonicVariable},
+        parameters::Vector{Num},
+        jacobian::Matrix{Num},
+    )
+        return new(
+            equations,
+            variables,
+            parameters,
+            DifferentialEquation(),
+            jacobian,
         )
     end
 end

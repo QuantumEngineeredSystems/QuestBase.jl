@@ -46,6 +46,9 @@ hv2 = HarmonicVariable(v, "test", "v", Num(1.0), y)
         @test heq.parameters == Num[]
         @test heq.jacobian isa Matrix{Num}
     end
+
+    heq3 = HarmonicEquation([eq1, eq2], [hv1, hv2], Num[], Num[1 1; 1 1])
+    @test isempty(heq3.natural_equation.harmonics)
 end
 
 @testset "Parameter handling" begin

@@ -32,6 +32,10 @@ mutable struct DifferentialEquation
         return new(eqs, OrderedDict(var => OrderedSet() for var in keys(eqs)))
     end
 
+    function DifferentialEquation()
+        return new(OrderedDict{Num,Equation}(), OrderedDict{Num,OrderedSet{Num}}())
+    end
+
     # uses the above constructor if no harmonics defined
     function DifferentialEquation(eqs::Vector{Equation}, vars::Vector{Num})
         if length(eqs) != length(vars)
