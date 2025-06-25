@@ -25,14 +25,14 @@ mutable struct HarmonicEquation
         nat_eq::DifferentialEquation,
     )
         return (
-            x = new(
+            x=new(
                 equations,
                 variables,
                 Num[],
                 nat_eq,
                 dummy_symbolic_Jacobian(length(variables)),
             );
-            x.parameters = _parameters(x);
+            x.parameters=_parameters(x);
             x
         )
     end
@@ -56,13 +56,7 @@ mutable struct HarmonicEquation
         parameters::Vector{Num},
         jacobian::Matrix{Num},
     )
-        return new(
-            equations,
-            variables,
-            parameters,
-            DifferentialEquation(),
-            jacobian,
-        )
+        return new(equations, variables, parameters, DifferentialEquation(), jacobian)
     end
 end
 
