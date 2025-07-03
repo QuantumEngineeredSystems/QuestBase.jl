@@ -18,7 +18,8 @@ using QuestBase:
     dummy_symbolic_Jacobian,
     @eqtest,
     get_all_terms,
-    get_independent
+    get_independent,
+    source
 
 # Setup common test variables
 @variables t, T
@@ -36,19 +37,20 @@ hv2 = HarmonicVariable(v, "test", "v", Num(1.0), y)
 
 # Test constructor
 @testset "Construction" begin
+
     heq1 = HarmonicEquation([eq1, eq2], [hv1, hv2], nat_eq)
     heq2 = HarmonicEquation([eq1, eq2], [hv1, hv2], Num[], nat_eq)
     for heq in [heq1, heq2]
         heq = heq1
         @test heq.equations == [eq1, eq2]
         @test heq.variables == [hv1, hv2]
-        @test heq.natural_equation == nat_eq
+        @test source(heq) == nat_eq
         @test heq.parameters == Num[]
         @test heq.jacobian isa Matrix{Num}
     end
 
     heq3 = HarmonicEquation([eq1, eq2], [hv1, hv2], Num[], Num[1 1; 1 1])
-    @test isempty(heq3.natural_equation.harmonics)
+    @test isempty(source(heq3).harmonics)
 end
 
 @testset "Parameter handling" begin

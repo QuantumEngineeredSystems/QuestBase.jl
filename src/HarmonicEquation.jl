@@ -1,22 +1,25 @@
+# TODO replace link with HarmonicBalance link
 """
 $(TYPEDEF)
 
-Holds a set of algebraic equations governing the harmonics of a `DifferentialEquation`.
+Holds a set of algebraic equations governing the harmonics of a
+[`DifferentialEquation`](@ref). HarmonicEquation can also be constructed from a
+[`QuantumCumulants.MeanfieldEquations`](https://qojulia.github.io/QuantumCumulants.jl/stable/api/#QuantumCumulants.MeanfieldEquations)`.
 
 # Fields
 $(TYPEDFIELDS)
 """
-mutable struct HarmonicEquation
+mutable struct HarmonicEquation{T}
     """A set of equations governing the harmonics."""
     equations::Vector{Equation}
     """A set of variables describing the harmonics."""
     variables::Vector{HarmonicVariable}
     """The parameters of the equation set."""
     parameters::Vector{Num}
-    "The natural equation (before the harmonic ansatz was used)."
-    natural_equation::DifferentialEquation
     "The Jacobian of the natural equation."
     jacobian::Matrix{Num}
+    "The system where the HarmonicEquation is derived from."
+    source_equations::T
 
     # use a self-referential constructor with _parameters
     function HarmonicEquation(
@@ -25,12 +28,12 @@ mutable struct HarmonicEquation
         nat_eq::DifferentialEquation,
     )
         return (
-            x=new(
+            x=new{DifferentialEquation}(
                 equations,
                 variables,
                 Num[],
-                nat_eq,
                 dummy_symbolic_Jacobian(length(variables)),
+                nat_eq,
             );
             x.parameters=_parameters(x);
             x
@@ -42,12 +45,12 @@ mutable struct HarmonicEquation
         parameters::Vector{Num},
         natural_equation::DifferentialEquation,
     )
-        return new(
+        return new{DifferentialEquation}(
             equations,
             variables,
             parameters,
-            natural_equation,
             dummy_symbolic_Jacobian(length(variables)),
+            natural_equation,
         )
     end
     function HarmonicEquation(
@@ -55,10 +58,14 @@ mutable struct HarmonicEquation
         variables::Vector{HarmonicVariable},
         parameters::Vector{Num},
         jacobian::Matrix{Num},
-    )
-        return new(equations, variables, parameters, DifferentialEquation(), jacobian)
+        source_equations::T,
+    ) where T
+        return new{T}(equations, variables, parameters, jacobian, source_equations)
     end
 end
+
+source(eom::HarmonicEquation) = eom.source_equations
+source_type(eom::HarmonicEquation{T}) where {T} = T
 
 "Get the parameters (not time nor variables) of a HarmonicEquation"
 function _parameters(eom::HarmonicEquation)
