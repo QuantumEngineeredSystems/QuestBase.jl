@@ -37,6 +37,12 @@ end
 
     # Test _show_ansatz
     @test contains(_show_ansatz(hv), "cos(ωt)")
+
+    @variables x
+    hv = HarmonicVariable(x)
+    @test repr(hv) == "Harmonic variable x\n"
+
+    @test _show_ansatz(hv) == "x"
 end
 
 @testset "Coordinate Transforms" begin
