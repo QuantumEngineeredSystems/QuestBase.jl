@@ -37,7 +37,6 @@ hv2 = HarmonicVariable(v, "test", "v", Num(1.0), y)
 
 # Test constructor
 @testset "Construction" begin
-
     heq1 = HarmonicEquation([eq1, eq2], [hv1, hv2], nat_eq)
     heq2 = HarmonicEquation([eq1, eq2], [hv1, hv2], Num[], nat_eq)
     for heq in [heq1, heq2]
@@ -49,7 +48,9 @@ hv2 = HarmonicVariable(v, "test", "v", Num(1.0), y)
         @test heq.jacobian isa Matrix{Num}
     end
 
-    heq3 = HarmonicEquation([eq1, eq2], [hv1, hv2], Num[], Num[1 1; 1 1])
+    heq3 = HarmonicEquation(
+        [eq1, eq2], [hv1, hv2], Num[], Num[1 1; 1 1], DifferentialEquation()
+    )
     @test isempty(source(heq3).harmonics)
 end
 

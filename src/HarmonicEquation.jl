@@ -59,7 +59,7 @@ mutable struct HarmonicEquation{T}
         parameters::Vector{Num},
         jacobian::Matrix{Num},
         source_equations::T,
-    ) where T
+    ) where {T}
         return new{T}(equations, variables, parameters, jacobian, source_equations)
     end
 end
