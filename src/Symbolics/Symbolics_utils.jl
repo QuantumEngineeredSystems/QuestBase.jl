@@ -4,10 +4,11 @@ _apply_termwise(f, x::Num) = wrap(_apply_termwise(f, unwrap(x)))
 
 # Symbolics v7 note: `unwrap` now always returns `BasicSymbolic`; use `Symbolics.value`
 # when you want the underlying literal number (via `Const`).
-_literal_number(x::Num) = (v = Symbolics.value(x); v isa Number ? v : nothing)
-_literal_number(x::BasicSymbolic) =
-    (v = SymbolicUtils.unwrap_const(x); v isa Number ? v : nothing)
-is_literal_zero(x) = (v = _literal_number(x); v !== nothing && iszero(v))
+_literal_number(x::Num) = (v=Symbolics.value(x); v isa Number ? v : nothing)
+function _literal_number(x::BasicSymbolic)
+    (v=SymbolicUtils.unwrap_const(x); v isa Number ? v : nothing)
+end
+is_literal_zero(x) = (v=_literal_number(x); v !== nothing && iszero(v))
 
 "Expands using SymbolicUtils.expand and expand_exp_power (changes exp(x)^n to exp(x*n)"
 function expand_all(x)
@@ -145,7 +146,7 @@ function is_harmonic(x::Num, t::Num)::Bool
     isempty(t_terms) && return true
     trigs = is_trig.(t_terms)
 
-        if !all(trigs)
+    if !all(trigs)
         return false
     else
         powers = [max_power(first(arguments(term.val)), t) for term in t_terms[trigs]]
@@ -165,10 +166,11 @@ Counts the number of derivatives of a symbolic variable.
 function count_derivatives(x::BasicSymbolic)
     if Symbolics.is_derivative(x)
         arg = first(arguments(x))
-        (issym(arg) ||
-         Symbolics.is_derivative(arg) ||
-         (isterm(arg) && issym(operation(arg)))) ||
-            error("The input is not a single term or symbol")
+        (
+            issym(arg) ||
+            Symbolics.is_derivative(arg) ||
+            (isterm(arg) && issym(operation(arg)))
+        ) || error("The input is not a single term or symbol")
         D = operation(x)
         return D.order + count_derivatives(arg)
     end

@@ -55,41 +55,45 @@ end
 
 function _trig_expand_products(x::BasicSymbolic)
     # Expand trig products/powers into sums so `get_independent` can isolate constants.
-    y = Postwalk(ex -> begin
-        if ispow(ex)
-            base, exponent = arguments(ex)
-            exp_val = SymbolicUtils.unwrap_const(exponent)
-            if exp_val isa Integer && exp_val == 2 && _is_sin_cos(base)
-                arg = first(arguments(base))
-                if operation(base) === cos
-                    return (1 + cos(2 * arg)) / 2
-                else
-                    return (1 - cos(2 * arg)) / 2
-                end
-            end
-        elseif ismul(ex)
-            # In SymbolicUtils v4, `arguments(ismul(...))` includes the numeric coefficient
-            # even though `ex.coeff` also stores it. Avoid double-counting it.
-            factors = BasicSymbolic[
-                f for f in arguments(ex) if !(SymbolicUtils.unwrap_const(f) isa Number)
-            ]
-            trig_idx = findall(_is_sin_cos, factors)
-            if length(trig_idx) >= 2
-                i, j = trig_idx[1], trig_idx[2]
-                repl = _trig_mul_to_sum(factors[i], factors[j])
-                if repl !== nothing
-                    others = BasicSymbolic[]
-                    for (k, f) in pairs(factors)
-                        (k == i || k == j) && continue
-                        push!(others, f)
+    y = Postwalk(
+        ex -> begin
+            if ispow(ex)
+                base, exponent = arguments(ex)
+                exp_val = SymbolicUtils.unwrap_const(exponent)
+                if exp_val isa Integer && exp_val == 2 && _is_sin_cos(base)
+                    arg = first(arguments(base))
+                    if operation(base) === cos
+                        return (1 + cos(2 * arg)) / 2
+                    else
+                        return (1 - cos(2 * arg)) / 2
                     end
-                    coeff = ex.coeff
-                    return coeff * prod(others; init=1) * repl
+                end
+            elseif ismul(ex)
+                # In SymbolicUtils v4, `arguments(ismul(...))` includes the numeric coefficient
+                # even though `ex.coeff` also stores it. Avoid double-counting it.
+                factors = BasicSymbolic[
+                    f for f in arguments(ex) if !(SymbolicUtils.unwrap_const(f) isa Number)
+                ]
+                trig_idx = findall(_is_sin_cos, factors)
+                if length(trig_idx) >= 2
+                    i, j = trig_idx[1], trig_idx[2]
+                    repl = _trig_mul_to_sum(factors[i], factors[j])
+                    if repl !== nothing
+                        others = BasicSymbolic[]
+                        for (k, f) in pairs(factors)
+                            (k == i || k == j) && continue
+                            push!(others, f)
+                        end
+                        coeff = ex.coeff
+                        return coeff * prod(others; init=1) * repl
+                    end
                 end
             end
-        end
-        return ex
-    end)(x)
+            return ex
+        end,
+    )(
+        x
+    )
     return SymbolicUtils.expand(y)
 end
 _trig_expand_products(x::Num) = wrap(_trig_expand_products(unwrap(x)))
@@ -227,7 +231,10 @@ function _strip_real_imag(x::BasicSymbolic)
             if coeff_val isa Number
                 r = real(coeff_val)
                 rest = prod(
-                    (f for f in arguments(ex) if !(SymbolicUtils.unwrap_const(f) isa Number));
+                    (
+                        f for
+                        f in arguments(ex) if !(SymbolicUtils.unwrap_const(f) isa Number)
+                    );
                     init=1,
                 )
                 return iszero(r) ? 0 : r * rest
@@ -249,7 +256,10 @@ function _strip_real_imag(x::BasicSymbolic)
             if coeff_val isa Number
                 i = imag(coeff_val)
                 rest = prod(
-                    (f for f in arguments(ex) if !(SymbolicUtils.unwrap_const(f) isa Number));
+                    (
+                        f for
+                        f in arguments(ex) if !(SymbolicUtils.unwrap_const(f) isa Number)
+                    );
                     init=1,
                 )
                 return iszero(i) ? 0 : i * rest

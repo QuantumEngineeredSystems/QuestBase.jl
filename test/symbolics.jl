@@ -148,11 +148,10 @@ end
 
     # try something harder!
     term = (a + b * cos(f * t + θ)^2)^3 * sin(f * t)
-    @eqtest fourier_sin_term(term, f, t) ==
-        expand(
-            a^3 + a^2 * b * 3//2 + 9//8 * a * b^2 + 5//16 * b^3 -
-            3//64 * b * (16 * a^2 + 16 * a * b + 5 * b^2) * cos(2 * θ),
-        )
+    @eqtest fourier_sin_term(term, f, t) == expand(
+        a^3 + a^2 * b * 3//2 + 9//8 * a * b^2 + 5//16 * b^3 -
+        3//64 * b * (16 * a^2 + 16 * a * b + 5 * b^2) * cos(2 * θ),
+    )
 
     @eqtest fourier_cos_term(term, f, t) ==
         expand(-3//64 * b * (16 * a^2 + 16 * a * b + 5 * b^2) * sin(2 * θ))
@@ -220,7 +219,8 @@ end
     @eqtest sort(get_all_terms(a + b + c); by=string) == sort([a, b, c]; by=string)
     @eqtest sort(get_all_terms(a * b * c); by=string) == sort([a, b, c]; by=string)
     @eqtest sort(get_all_terms(a / b); by=string) == sort([a, b]; by=string)
-    @eqtest sort(get_all_terms(a^2 + b^2 + c^2); by=string) == sort([a^2, b^2, c^2]; by=string)
+    @eqtest sort(get_all_terms(a^2 + b^2 + c^2); by=string) ==
+        sort([a^2, b^2, c^2]; by=string)
     @eqtest sort(get_all_terms(a^2 / b^2); by=string) == sort([a^2, b^2]; by=string)
     @eqtest sort(get_all_terms(2 * b^2); by=string) == sort([2, b^2]; by=string)
     @eqtest sort(get_all_terms(2 * b^2 ~ a); by=string) == sort([2, b^2, a]; by=string)

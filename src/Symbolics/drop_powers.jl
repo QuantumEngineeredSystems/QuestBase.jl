@@ -17,7 +17,9 @@ function drop_powers(expr::Num, vars::Vector{Num}, deg::Int)
     Symbolics.@variables ϵ
     subs_expr = deepcopy(expr)
     rules = Dict([var => ϵ * var for var in unique(vars)])
-    subs_expr = Symbolics.expand(substitute_all(subs_expr, rules; include_derivatives=false))
+    subs_expr = Symbolics.expand(
+        substitute_all(subs_expr, rules; include_derivatives=false)
+    )
     max_deg = max_power(subs_expr, ϵ)
     removal = Dict([ϵ^d => Num(0) for d in deg:max_deg])
     res = substitute_all(
