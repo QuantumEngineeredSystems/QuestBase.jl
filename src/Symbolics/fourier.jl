@@ -37,63 +37,38 @@ function _is_sin_cos(ex::BasicSymbolic)
     return isterm(ex) && (operation(ex) === sin || operation(ex) === cos)
 end
 
-function _trig_mul_to_sum(a::BasicSymbolic, b::BasicSymbolic)
-    op1, op2 = operation(a), operation(b)
-    x = first(arguments(a))
-    y = first(arguments(b))
-    if op1 === cos && op2 === cos
-        return (cos(x - y) + cos(x + y)) / 2
-    elseif op1 === sin && op2 === sin
-        return (cos(x - y) - cos(x + y)) / 2
-    elseif op1 === sin && op2 === cos
-        return (sin(x + y) + sin(x - y)) / 2
-    elseif op1 === cos && op2 === sin
-        return (sin(x + y) - sin(x - y)) / 2
-    end
-    return nothing
-end
+const _rw_trig_mul_to_sum = SymbolicUtils.Rewriters.Chain([
+    SymbolicUtils.@rule(cos(~x) * cos(~y) => (cos(~x - ~y) + cos(~x + ~y)) / 2),
+    SymbolicUtils.@rule(sin(~x) * sin(~y) => (cos(~x - ~y) - cos(~x + ~y)) / 2),
+    SymbolicUtils.@rule(sin(~x) * cos(~y) => (sin(~x + ~y) + sin(~x - ~y)) / 2),
+    SymbolicUtils.@rule(cos(~x) * sin(~y) => (sin(~x + ~y) - sin(~x - ~y)) / 2),
+])
+
+const _rw_trig_expand = SymbolicUtils.Rewriters.Fixpoint(
+    SymbolicUtils.Rewriters.Postwalk(
+        SymbolicUtils.Rewriters.Chain([
+            SymbolicUtils.@rule((cos(~x))^2 => (1 + cos(2 * ~x)) / 2),
+            SymbolicUtils.@rule((sin(~x))^2 => (1 - cos(2 * ~x)) / 2),
+            _rw_trig_mul_to_sum,
+        ]),
+    ),
+)
 
 function _trig_expand_products(x::BasicSymbolic)
     # Expand trig products/powers into sums so `get_independent` can isolate constants.
-    y = Postwalk(
-        ex -> begin
-            if ispow(ex)
-                base, exponent = arguments(ex)
-                exp_val = SymbolicUtils.unwrap_const(exponent)
-                if exp_val isa Integer && exp_val == 2 && _is_sin_cos(base)
-                    arg = first(arguments(base))
-                    if operation(base) === cos
-                        return (1 + cos(2 * arg)) / 2
-                    else
-                        return (1 - cos(2 * arg)) / 2
-                    end
-                end
-            elseif ismul(ex)
-                # In SymbolicUtils v4, `arguments(ismul(...))` includes the numeric coefficient
-                # even though `ex.coeff` also stores it. Avoid double-counting it.
-                factors = BasicSymbolic[
-                    f for f in arguments(ex) if !(SymbolicUtils.unwrap_const(f) isa Number)
-                ]
-                trig_idx = findall(_is_sin_cos, factors)
-                if length(trig_idx) >= 2
-                    i, j = trig_idx[1], trig_idx[2]
-                    repl = _trig_mul_to_sum(factors[i], factors[j])
-                    if repl !== nothing
-                        others = BasicSymbolic[]
-                        for (k, f) in pairs(factors)
-                            (k == i || k == j) && continue
-                            push!(others, f)
-                        end
-                        coeff = ex.coeff
-                        return coeff * prod(others; init=1) * repl
-                    end
-                end
-            end
-            return ex
-        end,
-    )(
-        x
-    )
+    y = Postwalk(ex -> begin
+        if ismul(ex)
+            # In SymbolicUtils v4, `arguments(ismul(...))` includes the numeric coefficient
+            # even though `ex.coeff` also stores it. Avoid double-counting it.
+            coeff = ex.coeff
+            factors = BasicSymbolic[
+                f for f in arguments(ex) if !(SymbolicUtils.unwrap_const(f) isa Number)
+            ]
+            rest = isempty(factors) ? 1 : prod(factors; init=1)
+            return coeff * _rw_trig_expand(rest)
+        end
+        return _rw_trig_expand(ex)
+    end)(x)
     return SymbolicUtils.expand(y)
 end
 _trig_expand_products(x::Num) = wrap(_trig_expand_products(unwrap(x)))
