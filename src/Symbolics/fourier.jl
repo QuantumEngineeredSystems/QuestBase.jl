@@ -56,19 +56,23 @@ const _rw_trig_expand = SymbolicUtils.Rewriters.Fixpoint(
 
 function _trig_expand_products(x::BasicSymbolic)
     # Expand trig products/powers into sums so `get_independent` can isolate constants.
-    y = Postwalk(ex -> begin
-        if ismul(ex)
-            # In SymbolicUtils v4, `arguments(ismul(...))` includes the numeric coefficient
-            # even though `ex.coeff` also stores it. Avoid double-counting it.
-            coeff = ex.coeff
-            factors = BasicSymbolic[
-                f for f in arguments(ex) if !(SymbolicUtils.unwrap_const(f) isa Number)
-            ]
-            rest = isempty(factors) ? 1 : prod(factors; init=1)
-            return coeff * _rw_trig_expand(rest)
-        end
-        return _rw_trig_expand(ex)
-    end)(x)
+    y = Postwalk(
+        ex -> begin
+            if ismul(ex)
+                # In SymbolicUtils v4, `arguments(ismul(...))` includes the numeric coefficient
+                # even though `ex.coeff` also stores it. Avoid double-counting it.
+                coeff = ex.coeff
+                factors = BasicSymbolic[
+                    f for f in arguments(ex) if !(SymbolicUtils.unwrap_const(f) isa Number)
+                ]
+                rest = isempty(factors) ? 1 : prod(factors; init=1)
+                return coeff * _rw_trig_expand(rest)
+            end
+            return _rw_trig_expand(ex)
+        end,
+    )(
+        x
+    )
     return SymbolicUtils.expand(y)
 end
 _trig_expand_products(x::Num) = wrap(_trig_expand_products(unwrap(x)))
@@ -401,13 +405,21 @@ function _normalize_trig_signs(x::BasicSymbolic)
             arg = first(arguments(x))
             if SymbolicUtils.isnegative(arg)
                 new_arg = -arg
-                return op === sin ? -sin(new_arg) : cos(new_arg)
+                return if op === sin
+                    -SymbolicUtils.term(sin, new_arg)
+                else
+                    SymbolicUtils.term(cos, new_arg)
+                end
             elseif ismul(arg)
                 coeff_val = SymbolicUtils.unwrap_const(arg.coeff)
                 # Handle coefficients that are complex with zero imaginary part, e.g. (-2 + 0im)θ.
                 if coeff_val isa Number && isreal(coeff_val) && real(coeff_val) < 0
                     new_arg = -arg
-                    return op === sin ? -sin(new_arg) : cos(new_arg)
+                    return if op === sin
+                        -SymbolicUtils.term(sin, new_arg)
+                    else
+                        SymbolicUtils.term(cos, new_arg)
+                    end
                 end
             end
         end

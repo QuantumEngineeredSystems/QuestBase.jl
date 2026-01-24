@@ -8,6 +8,7 @@ using SymbolicUtils:
     SymbolicUtils,
     Postwalk,
     BasicSymbolic,
+    unwrap,
     isterm,
     ispow,
     isadd,
@@ -19,7 +20,6 @@ using SymbolicUtils:
 using Symbolics:
     Symbolics,
     Num,
-    unwrap,
     wrap,
     get_variables,
     Equation,
