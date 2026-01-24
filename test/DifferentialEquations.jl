@@ -41,7 +41,9 @@ using QuestBase:
     expr = d(x, t, 2) + ω0^2 * x
     diff_eq3 = DifferentialEquation(expr, x)
     @test length(diff_eq3.equations) == 1
-    @test diff_eq3.equations[x].rhs == 0
+        rhs_simplified = Symbolics.simplify(diff_eq3.equations[x].rhs)
+        rhs_val = Symbolics.value(rhs_simplified)
+        @test rhs_val isa Number && iszero(rhs_val)
 
     # Test empty constructor
     diff = DifferentialEquation()

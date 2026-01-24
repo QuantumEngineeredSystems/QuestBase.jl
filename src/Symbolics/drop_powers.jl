@@ -17,10 +17,14 @@ function drop_powers(expr::Num, vars::Vector{Num}, deg::Int)
     Symbolics.@variables ϵ
     subs_expr = deepcopy(expr)
     rules = Dict([var => ϵ * var for var in unique(vars)])
-    subs_expr = Symbolics.expand(substitute_all(subs_expr, rules))
+    subs_expr = Symbolics.expand(substitute_all(subs_expr, rules; include_derivatives=false))
     max_deg = max_power(subs_expr, ϵ)
     removal = Dict([ϵ^d => Num(0) for d in deg:max_deg])
-    res = substitute_all(substitute_all(subs_expr, removal), Dict(ϵ => Num(1)))
+    res = substitute_all(
+        substitute_all(subs_expr, removal; include_derivatives=false),
+        Dict(ϵ => Num(1));
+        include_derivatives=false,
+    )
     return Symbolics.expand(res)
 end
 
@@ -30,7 +34,7 @@ end
 
 # calls the above for various types of the first argument
 function drop_powers(eq::Equation, var::Vector{Num}, deg::Int)
-    return drop_powers(eq.lhs, var, deg) .~ drop_powers(eq.lhs, var, deg)
+    return drop_powers(eq.lhs, var, deg) .~ drop_powers(eq.rhs, var, deg)
 end
 function drop_powers(eqs::Vector{Equation}, var::Vector{Num}, deg::Int)
     return [
@@ -45,9 +49,12 @@ drop_powers(x, vars, deg::Int) = drop_powers(wrap(x), vars, deg)
 function max_power(x::Num, y::Num)
     terms = get_all_terms(x)
     powers = power_of.(terms, y)
-    literal_powers = Int[
-        Int(SymbolicUtils.unwrap_const(p)) for p in powers if SymbolicUtils.is_literal_number(p)
-    ]
+    literal_powers = Int[]
+    for p in powers
+        pv = SymbolicUtils.unwrap_const(p)
+        pv isa Number || continue
+        push!(literal_powers, Int(pv))
+    end
     isempty(literal_powers) && return 0
     return maximum(literal_powers)
 end

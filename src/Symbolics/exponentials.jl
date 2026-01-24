@@ -43,8 +43,9 @@ function simplify_exp_products_mul(expr)
     rest_ind = setdiff(1:length(arguments(expr)), ind)
     rest = isempty(rest_ind) ? 1 : prod(arguments(expr)[rest_ind])
     total = isempty(ind) ? 0 : sum(getindex.(arguments.(arguments(expr)[ind]), 1))
-    if SymbolicUtils.is_literal_number(total)
-        return iszero(SymbolicUtils.unwrap_const(total)) ? rest : rest * exp(total)
+    total_val = SymbolicUtils.unwrap_const(total)
+    if total_val isa Number
+        return iszero(total_val) ? rest : rest * exp(total)
     end
     return rest * exp(total)
 end

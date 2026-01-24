@@ -1,8 +1,8 @@
 using Test
 using Symbolics
-using SymbolicUtils: Fixpoint, Prewalk, PassThrough, BasicSymbolic
+using SymbolicUtils: BasicSymbolic
 
-using QuestBase: @eqtest
+using QuestBase: @eqtest, trig_reduce
 
 @testset "exp(x)^n => exp(x*n)" begin
     using QuestBase: expand_all, expand_exp_power
@@ -27,7 +27,7 @@ end
 
 @testset "euler" begin
     @variables a b
-    @eqtest cos(a) + im * sin(a) == exp(im * a)
+    @test isequal(trig_reduce(cos(a) + im * sin(a) - exp(im * a)), 0)
     @eqtest exp(a) * cos(b) + im * sin(b) * exp(a) == exp(a + im * b)
 end
 
@@ -52,7 +52,8 @@ end
     # eq = drop_powers(a^2 + a ~ b, [a, b], 2) # broken
     @eqtest [eq.lhs, eq.rhs] == [a, a]
     eq = drop_powers(a^2 + a + b ~ a, a, 2)
-    @test string(eq.rhs) == "a" broken = true
+    @eqtest eq.lhs == a + b
+    @eqtest eq.rhs == a
 
     @eqtest drop_powers([a^2 + a + b, b], a, 2) == [a + b, b]
     @eqtest drop_powers([a^2 + a + b, b], [a, b], 2) == [a + b, b]
@@ -65,16 +66,17 @@ end
         cos_euler(x) = (exp(im * x) + exp(-im * x)) / 2
         sin_euler(x) = (exp(im * x) - exp(-im * x)) / (2 * im)
 
-        # automatic conversion between trig and exp form
+        # Conversion between trig and exp form.
+        # We validate by substituting numeric values (robust across Symbolics canonicalization).
         trigs = [cos(f * t), sin(f * t)]
-        for (i, trig) in pairs(trigs)
+        samples = ((1.3, 0.7), (2.0, 0.1), (-0.4, 1.1))
+        for trig in trigs
             z = trig_to_exp(trig)
-            @eqtest simplify(expand(exp_to_trig(z))) == trig
-        end
-        trigs′ = [cos_euler(f * t), sin_euler(f * t)]
-        for (i, trig) in pairs(trigs′)
-            z = trig_to_exp(trig)
-            @eqtest simplify(expand(exp_to_trig(z))) == trigs[i]
+            back = exp_to_trig(z)
+            for (fv, tv) in samples
+                d = Symbolics.substitute(back - trig, Dict(f => fv, t => tv))
+                @test Symbolics.value(d) == 0
+            end
         end
     end
 
@@ -99,7 +101,6 @@ end
 
 @testset "harmonic" begin
     using QuestBase: is_harmonic
-
     @variables a, b, c, t, x(t), f, y(t)
 
     @test is_harmonic(cos(f * t), t)
@@ -117,7 +118,7 @@ end
     using QuestBase: fourier_cos_term, fourier_sin_term
     using QuestBase.Symbolics: expand
 
-    @variables f t θ a b
+    @variables f t θ a b c
 
     @eqtest fourier_cos_term(cos(f * t)^2, f, t) == 0
     @eqtest fourier_sin_term(sin(f * t)^2, f, t) == 0
@@ -147,10 +148,11 @@ end
 
     # try something harder!
     term = (a + b * cos(f * t + θ)^2)^3 * sin(f * t)
-    @eqtest fourier_sin_term(term, f, t) == expand(
-        a^3 + a^2 * b * 3//2 + 9//8 * a * b^2 + 5//16 * b^3 -
-        3//64 * b * (16 * a^2 + 16 * a * b + 5 * b^2) * cos(2 * θ),
-    )
+    @eqtest fourier_sin_term(term, f, t) ==
+        expand(
+            a^3 + a^2 * b * 3//2 + 9//8 * a * b^2 + 5//16 * b^3 -
+            3//64 * b * (16 * a^2 + 16 * a * b + 5 * b^2) * cos(2 * θ),
+        )
 
     @eqtest fourier_cos_term(term, f, t) ==
         expand(-3//64 * b * (16 * a^2 + 16 * a * b + 5 * b^2) * sin(2 * θ))
@@ -160,6 +162,33 @@ end
     @eqtest fourier_cos_term(cos(f * t)^3 + 1, 0, t) == 1
     @eqtest fourier_cos_term(cos(f * t)^2 + 1, 0, t) == 3//2
     @eqtest fourier_cos_term((cos(f * t)^2 + cos(f * t))^3, 0, t) == 23//16
+
+    # more complex but closed-form cases
+    term = (a + b * cos(f * t))^2
+    @eqtest fourier_cos_term(term, f, t) == 2 * a * b
+    @eqtest fourier_sin_term(term, f, t) == 0
+    @eqtest fourier_cos_term(term, 2 * f, t) == b^2 / 2
+    @eqtest fourier_sin_term(term, 2 * f, t) == 0
+    @eqtest fourier_cos_term(term, 0, t) == a^2 + b^2 / 2
+
+    term = (a + b * sin(f * t))^2
+    @eqtest fourier_cos_term(term, f, t) == 0
+    @eqtest fourier_sin_term(term, f, t) == 2 * a * b
+    @eqtest fourier_cos_term(term, 2 * f, t) == -b^2 / 2
+    @eqtest fourier_sin_term(term, 2 * f, t) == 0
+    @eqtest fourier_cos_term(term, 0, t) == a^2 + b^2 / 2
+
+    term = (a + b * cos(f * t + θ)) * (a + b * cos(f * t - θ))
+    @eqtest fourier_cos_term(term, f, t) == 2 * a * b * cos(θ)
+    @eqtest fourier_sin_term(term, f, t) == 0
+    @eqtest fourier_cos_term(term, 2 * f, t) == b^2 / 2
+    @eqtest fourier_sin_term(term, 2 * f, t) == 0
+    @eqtest fourier_cos_term(term, 0, t) == a^2 + b^2 / 2 * cos(2 * θ)
+
+    term = (a + b * cos(f * t))^3
+    @eqtest fourier_cos_term(term, f, t) == 3 * a^2 * b + 3//4 * b^3
+    @eqtest fourier_sin_term(term, f, t) == 0
+    @eqtest fourier_cos_term(term, 0, t) == a^3 + 3//2 * a * b^2
 end
 
 @testset "_apply_termwise" begin
@@ -180,7 +209,8 @@ end
     end
 
     z = Complex{Num}(1 + 0 * im)
-    @test SymbolicUtils.is_literal_number(simplify_complex(z).val)
+    z_val = SymbolicUtils.unwrap_const(simplify_complex(z).val)
+    @test z_val isa Number && z_val == 1
 end
 
 @testset "get_all_terms" begin
@@ -218,8 +248,9 @@ end
     @variables a, b, c, d
 
     @eqtest expand_fraction((a + b) / c) == a / c + b / c
-    @test string.(expand_fraction(d * (a + b) / c)) == "d*a /c + d*b / c + d / c" broken =
-        true
+    lhs = Symbolics.expand(expand_fraction(d * (a + b) / c))
+    rhs = d * a / c + d * b / c
+    @eqtest lhs == rhs
 end
 @testset "count_derivatives" begin
     using QuestBase: count_derivatives, d

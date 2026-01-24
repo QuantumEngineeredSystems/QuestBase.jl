@@ -62,11 +62,23 @@ end
 
 "Get the parameters (not time nor variables) of a HarmonicEquation"
 function _parameters(eom::HarmonicEquation)
-    all_symbols = flatten([
-        cat(get_variables(eq.lhs), get_variables(eq.rhs); dims=1) for eq in eom.equations
-    ])
-    # subtract the set of independent variables (i.e., time) from all free symbols
-    return setdiff(all_symbols, get_variables(eom), get_independent_variables(eom))
+    symbols = Num[]
+    for eq in eom.equations
+        vars = union(Symbolics.get_variables(eq.lhs), Symbolics.get_variables(eq.rhs))
+        vars = sort!(collect(vars); by=string)
+        for sym in vars
+            if Symbolics.is_derivative(sym)
+                sym = first(Symbolics.arguments(sym))
+            end
+            push!(symbols, Num(sym))
+        end
+    end
+    vars = Set(get_variables(eom))
+    indep = Set(get_independent_variables(eom))
+    params = filter(s -> !(s in vars || s in indep), symbols)
+    params = unique(params)
+    sort!(params; by=string)
+    return params
 end
 
 """

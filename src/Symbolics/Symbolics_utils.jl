@@ -2,6 +2,13 @@
 expand_all(x::Num) = Num(expand_all(x.val))
 _apply_termwise(f, x::Num) = wrap(_apply_termwise(f, unwrap(x)))
 
+# Symbolics v7 note: `unwrap` now always returns `BasicSymbolic`; use `Symbolics.value`
+# when you want the underlying literal number (via `Const`).
+_literal_number(x::Num) = (v = Symbolics.value(x); v isa Number ? v : nothing)
+_literal_number(x::BasicSymbolic) =
+    (v = SymbolicUtils.unwrap_const(x); v isa Number ? v : nothing)
+is_literal_zero(x) = (v = _literal_number(x); v !== nothing && iszero(v))
+
 "Expands using SymbolicUtils.expand and expand_exp_power (changes exp(x)^n to exp(x*n)"
 function expand_all(x)
     result = Postwalk(expand_exp_power)(SymbolicUtils.expand(x))
@@ -15,7 +22,14 @@ function expand_fraction(x::BasicSymbolic)
     elseif ismul(x)
         return _apply_termwise(expand_fraction, x)
     elseif isdiv(x)
-        return sum([arg / x.den for arg in arguments(x.num)])
+        # Only distribute division over addition in the numerator.
+        # In SymbolicUtils v4, `arguments(x.num)` for a multiplication returns factors,
+        # so splitting unconditionally would produce incorrect results (e.g. d*(a+b)/c).
+        num, den = x.num, x.den
+        if isadd(num)
+            return sum([expand_fraction(arg) / den for arg in arguments(num)])
+        end
+        return expand_fraction(num) / expand_fraction(den)
     else
         return x
     end
@@ -131,7 +145,7 @@ function is_harmonic(x::Num, t::Num)::Bool
     isempty(t_terms) && return true
     trigs = is_trig.(t_terms)
 
-    if !prod(trigs)
+        if !all(trigs)
         return false
     else
         powers = [max_power(first(arguments(term.val)), t) for term in t_terms[trigs]]
