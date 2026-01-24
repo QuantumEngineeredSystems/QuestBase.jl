@@ -181,13 +181,12 @@ _postwalk(f, x::Num) = wrap(_postwalk(f, unwrap(x)))
 _postwalk(f, x::Complex{Num}) = _postwalk(f, x.re) + im * _postwalk(f, x.im)
 _postwalk(f, x) = x
 
-_strip_zero_imag_literals(x) = _postwalk(
-    ex -> begin
+function _strip_zero_imag_literals(x)
+    _postwalk(ex -> begin
         v = SymbolicUtils.unwrap_const(ex)
         return (v isa Complex && iszero(imag(v))) ? real(v) : ex
-    end,
-    x,
-)
+    end, x)
+end
 
 function _strip_real_imag(x::BasicSymbolic)
     function _real_of(ex::BasicSymbolic)

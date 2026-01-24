@@ -30,8 +30,9 @@ function _eqtest_symbolic_scalar(a, b)
     return isequal(diff, 0)
 end
 
-_eqtest_equal(a::Complex, b::Complex) =
+function _eqtest_equal(a::Complex, b::Complex)
     _eqtest_equal(real(a), real(b)) && _eqtest_equal(imag(a), imag(b))
+end
 _eqtest_equal(a::Complex, b) = _eqtest_equal(real(a), b) && _eqtest_equal(imag(a), 0)
 _eqtest_equal(a, b::Complex) = _eqtest_equal(a, real(b)) && _eqtest_equal(0, imag(b))
 
@@ -45,7 +46,9 @@ function _eqtest_equal(a::Tuple, b::Tuple)
     return all(i -> _eqtest_equal(a[i], b[i]), eachindex(a))
 end
 
-_eqtest_equal(a::Equation, b::Equation) = _eqtest_equal(a.lhs, b.lhs) && _eqtest_equal(a.rhs, b.rhs)
+function _eqtest_equal(a::Equation, b::Equation)
+    _eqtest_equal(a.lhs, b.lhs) && _eqtest_equal(a.rhs, b.rhs)
+end
 
 function _eqtest_equal(a, b)
     isequal(a, b) && return true

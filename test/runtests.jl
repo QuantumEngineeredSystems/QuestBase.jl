@@ -13,6 +13,10 @@ end
     include("symbolics.jl")
 end
 
+@testset "Utils" begin
+    include("utils.jl")
+end
+
 @testset "DifferentialEquations" begin
     include("DifferentialEquations.jl")
 end

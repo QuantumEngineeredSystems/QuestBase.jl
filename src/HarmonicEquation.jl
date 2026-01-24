@@ -116,6 +116,7 @@ Base.show(eom::HarmonicEquation) = show_fields(eom)
 function substitute_all(eom::HarmonicEquation, rules::Union{Dict,Pair})::HarmonicEquation
     new_eom = deepcopy(eom)
     new_eom.equations = expand_derivatives.(substitute_all(eom.equations, rules))
+    new_eom.variables = substitute_all(eom.variables, rules)
     return new_eom
 end
 

@@ -56,6 +56,13 @@ end
 
     @eqtest drop_powers([a^2 + a + b, b], a, 2) == [a + b, b]
     @eqtest drop_powers([a^2 + a + b, b], [a, b], 2) == [a + b, b]
+
+    @testset "Vector{Equation}" begin
+        eqs = [a^2 + a ~ a, b^3 + b ~ 0]
+        out = drop_powers(eqs, [a], 2)
+        @eqtest [out[1].lhs, out[1].rhs] == [a, a]
+        @eqtest out[2] == eqs[2]
+    end
 end
 
 @testset "trig_to_exp and trig_to_exp" begin
@@ -277,4 +284,24 @@ end
     @eqtest substitute_all(a * b * c * d * e * f * g * h, rules) == b^2 * d^2 * f^2 * h^2
     @eqtest substitute_all([a, c, e], rules) == [b, d, f]
     @eqtest substitute_all(a + b * im, rules) == b + b * im
+
+    @testset "include_derivatives rewrites Differential(var)" begin
+        @variables t T x(t)
+        D = Differential(t)
+        expr = D(x)
+
+        # Symbolics substitution currently rewrites arguments but does not rewrite the
+        # derivative operator itself (i.e., the `operation` remains `Differential(t)`).
+        expected_arg = Symbolics.unwrap(Symbolics.substitute(x, Dict(t => T)))
+
+        out = substitute_all(expr, Dict(t => T); include_derivatives=true)
+        out_bs = Symbolics.unwrap(out)
+        @test Symbolics.operation(out_bs) == Differential(t)
+        @test isequal(first(Symbolics.arguments(out_bs)), expected_arg)
+
+        out_no = substitute_all(expr, Dict(t => T); include_derivatives=false)
+        out_no_bs = Symbolics.unwrap(out_no)
+        @test Symbolics.operation(out_no_bs) == Differential(t)
+        @test isequal(first(Symbolics.arguments(out_no_bs)), expected_arg)
+    end
 end
