@@ -198,17 +198,7 @@ function rearrange!(eom::DifferentialEquation, new_lhs::Vector{Num})
     return nothing
 end
 function get_variables_nums(vars::Vector{Num})
-    # Symbolics v7: `get_variables(Differential(t, n)(x(t)))` returns the derivative term
-    # itself, so we must explicitly strip derivatives to recover the dependent variable.
-    out = Num[]
-    for expr in vars
-        sym = Symbolics.unwrap(expr)
-        while Symbolics.is_derivative(sym)
-            sym = first(Symbolics.arguments(sym))
-        end
-        push!(out, Num(sym))
-    end
-    return out
+    return strip_derivative.(vars)
 end # TODO: remove this function or at least better names
 
 """

@@ -67,10 +67,7 @@ function _parameters(eom::HarmonicEquation)
         vars = union(Symbolics.get_variables(eq.lhs), Symbolics.get_variables(eq.rhs))
         vars = sort!(collect(vars); by=string)
         for sym in vars
-            if Symbolics.is_derivative(sym)
-                sym = first(Symbolics.arguments(sym))
-            end
-            push!(symbols, Num(sym))
+            push!(symbols, strip_derivative(Num(sym)))
         end
     end
     vars = Set(get_variables(eom))

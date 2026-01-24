@@ -12,7 +12,6 @@ using QuestBase: @eqtest, trig_reduce
     @eqtest simplify(exp(a)^3) == exp(3 * a)
     @eqtest simplify(exp(a)^n) == exp(n * a)
     @eqtest expand_all(exp(a)^3) == exp(3 * a)
-    @eqtest expand_all(exp(a)^3) == exp(3 * a)
     @eqtest expand_all(im * exp(a)^5) == im * exp(5 * a)
 end
 
@@ -63,9 +62,6 @@ end
     using QuestBase: expand_all, trig_to_exp, exp_to_trig
     @testset "Num" begin
         @variables f t
-        cos_euler(x) = (exp(im * x) + exp(-im * x)) / 2
-        sin_euler(x) = (exp(im * x) - exp(-im * x)) / (2 * im)
-
         # Conversion between trig and exp form.
         # We validate by substituting numeric values (robust across Symbolics canonicalization).
         trigs = [cos(f * t), sin(f * t)]
@@ -162,32 +158,39 @@ end
     @eqtest fourier_cos_term(cos(f * t)^2 + 1, 0, t) == 3//2
     @eqtest fourier_cos_term((cos(f * t)^2 + cos(f * t))^3, 0, t) == 23//16
 
+    function _check_fourier(term, specs)
+        for (ω, cos_expected, sin_expected) in specs
+            @eqtest fourier_cos_term(term, ω, t) == cos_expected
+            @eqtest fourier_sin_term(term, ω, t) == sin_expected
+        end
+        return nothing
+    end
+
     # more complex but closed-form cases
-    term = (a + b * cos(f * t))^2
-    @eqtest fourier_cos_term(term, f, t) == 2 * a * b
-    @eqtest fourier_sin_term(term, f, t) == 0
-    @eqtest fourier_cos_term(term, 2 * f, t) == b^2 / 2
-    @eqtest fourier_sin_term(term, 2 * f, t) == 0
-    @eqtest fourier_cos_term(term, 0, t) == a^2 + b^2 / 2
-
-    term = (a + b * sin(f * t))^2
-    @eqtest fourier_cos_term(term, f, t) == 0
-    @eqtest fourier_sin_term(term, f, t) == 2 * a * b
-    @eqtest fourier_cos_term(term, 2 * f, t) == -b^2 / 2
-    @eqtest fourier_sin_term(term, 2 * f, t) == 0
-    @eqtest fourier_cos_term(term, 0, t) == a^2 + b^2 / 2
-
-    term = (a + b * cos(f * t + θ)) * (a + b * cos(f * t - θ))
-    @eqtest fourier_cos_term(term, f, t) == 2 * a * b * cos(θ)
-    @eqtest fourier_sin_term(term, f, t) == 0
-    @eqtest fourier_cos_term(term, 2 * f, t) == b^2 / 2
-    @eqtest fourier_sin_term(term, 2 * f, t) == 0
-    @eqtest fourier_cos_term(term, 0, t) == a^2 + b^2 / 2 * cos(2 * θ)
-
-    term = (a + b * cos(f * t))^3
-    @eqtest fourier_cos_term(term, f, t) == 3 * a^2 * b + 3//4 * b^3
-    @eqtest fourier_sin_term(term, f, t) == 0
-    @eqtest fourier_cos_term(term, 0, t) == a^3 + 3//2 * a * b^2
+    for (term, specs) in (
+        (
+            (a + b * cos(f * t))^2,
+            ((f, 2 * a * b, 0), (2 * f, b^2 / 2, 0), (0, a^2 + b^2 / 2, 0)),
+        ),
+        (
+            (a + b * sin(f * t))^2,
+            ((f, 0, 2 * a * b), (2 * f, -b^2 / 2, 0), (0, a^2 + b^2 / 2, 0)),
+        ),
+        (
+            (a + b * cos(f * t + θ)) * (a + b * cos(f * t - θ)),
+            (
+                (f, 2 * a * b * cos(θ), 0),
+                (2 * f, b^2 / 2, 0),
+                (0, a^2 + b^2 / 2 * cos(2 * θ), 0),
+            ),
+        ),
+        (
+            (a + b * cos(f * t))^3,
+            ((f, 3 * a^2 * b + 3//4 * b^3, 0), (0, a^3 + 3//2 * a * b^2, 0)),
+        ),
+    )
+        _check_fourier(term, specs)
+    end
 end
 
 @testset "_apply_termwise" begin

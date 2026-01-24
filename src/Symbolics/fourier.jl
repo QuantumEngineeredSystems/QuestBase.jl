@@ -13,14 +13,6 @@ This function performs the following steps:
 
 Returns the simplified expression as a `Num` type.
 """
-
-"""
-    is_trig(f::Num)
-
-Check if the given expression `f` is a trigonometric function (sine or cosine).
-
-Returns `true` if `f` is either `sin` or `cos`, `false` otherwise.
-"""
 function trig_reduce(x)
     x = add_div(x) # a/b + c/d = (ad + bc)/bd
     x = expand(x) # open all brackets
@@ -31,10 +23,6 @@ function trig_reduce(x)
     x = _trig_expand_products(x)
     x = Num(simplify_complex(expand(x)))
     return x # simplify_fractions(x)# (a*c^2 + b*c)/c^2 = (a*c + b)/c
-end
-
-function _is_sin_cos(ex::BasicSymbolic)
-    return isterm(ex) && (operation(ex) === sin || operation(ex) === cos)
 end
 
 const _rw_trig_mul_to_sum = SymbolicUtils.Rewriters.Chain([
@@ -78,7 +66,13 @@ end
 _trig_expand_products(x::Num) = wrap(_trig_expand_products(unwrap(x)))
 _trig_expand_products(x) = x
 
-"Return true if `f` is a sin or cos."
+"""
+    is_trig(f::Num)
+
+Check if the given expression `f` is a trigonometric function (sine or cosine).
+
+Returns `true` if `f` is either `sin` or `cos`, `false` otherwise.
+"""
 is_trig(f::Num) = is_trig(f.val)
 is_trig(f) = false
 function is_trig(f::BasicSymbolic)
@@ -100,6 +94,9 @@ Used in Fourier analysis to find the cosine components of a periodic function.
 - `ω`: The angular frequency
 - `t`: The time variable
 """
+function fourier_cos_term(x, ω, t)
+    return _fourier_term(x, ω, t, cos)
+end
 
 """
     add_div(x)
@@ -109,11 +106,7 @@ Transforms expressions of the form a/b + c/d into (ad + bc)/bd.
 
 Returns the simplified fraction as a `Num` type.
 """
-function fourier_cos_term(x, ω, t)
-    return _fourier_term(x, ω, t, cos)
-end
-
-"Simplify fraction a/b + c/d = (ad + bc)/bd"
+# Simplify fraction a/b + c/d = (ad + bc)/bd
 add_div(x) = wrap(Postwalk(add_with_div)(unwrap(x)))
 
 """
@@ -183,23 +176,18 @@ function _strip_real_imag(x::Complex{Num})
     return _strip_real_imag(x.re) + im * _strip_real_imag(x.im)
 end
 
-function _strip_zero_imag_literals(x::BasicSymbolic)
-    return Postwalk(ex -> begin
+_postwalk(f, x::BasicSymbolic) = Postwalk(f)(x)
+_postwalk(f, x::Num) = wrap(_postwalk(f, unwrap(x)))
+_postwalk(f, x::Complex{Num}) = _postwalk(f, x.re) + im * _postwalk(f, x.im)
+_postwalk(f, x) = x
+
+_strip_zero_imag_literals(x) = _postwalk(
+    ex -> begin
         v = SymbolicUtils.unwrap_const(ex)
-        if v isa Complex && iszero(imag(v))
-            return real(v)
-        end
-        return ex
-    end)(x)
-end
-
-function _strip_zero_imag_literals(x::Num)
-    return wrap(_strip_zero_imag_literals(unwrap(x)))
-end
-
-function _strip_zero_imag_literals(x::Complex{Num})
-    return _strip_zero_imag_literals(x.re) + im * _strip_zero_imag_literals(x.im)
-end
+        return (v isa Complex && iszero(imag(v))) ? real(v) : ex
+    end,
+    x,
+)
 
 function _strip_real_imag(x::BasicSymbolic)
     function _real_of(ex::BasicSymbolic)
@@ -285,9 +273,7 @@ function _simplify_trig_zero(x::BasicSymbolic)
     end)(x)
 end
 
-function _simplify_trig_zero(x::Num)
-    return wrap(_simplify_trig_zero(unwrap(x)))
-end
+_simplify_trig_zero(x::Num) = wrap(_simplify_trig_zero(unwrap(x)))
 
 """
     trig_to_exp(x::Num)

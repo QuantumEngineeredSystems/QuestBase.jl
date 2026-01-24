@@ -4,6 +4,17 @@ end
 
 flatten(a) = collect(Iterators.flatten(a))
 
+"""Strip Symbolics derivative wrappers to recover the base dependent variable."""
+strip_derivative(x::Num) = wrap(strip_derivative(unwrap(x)))
+function strip_derivative(x::BasicSymbolic)
+    y = x
+    while Symbolics.is_derivative(y)
+        y = first(arguments(y))
+    end
+    return y
+end
+strip_derivative(x) = x
+
 "Show fields of an object."
 function show_fields(object)
     for field in fieldnames(typeof(object)) # display every field
@@ -13,55 +24,37 @@ function show_fields(object)
 end
 
 _is_symbolic_like(x) = x isa Num || x isa BasicSymbolic
-_is_symbolic_like(x::Complex) = _is_symbolic_like(real(x)) || _is_symbolic_like(imag(x))
 
 function _eqtest_symbolic_scalar(a, b)
     diff = Symbolics.simplify(Symbolics.expand(a - b))
     return isequal(diff, 0)
 end
 
-function _eqtest_symbolic_scalar(a::Complex, b::Complex)
-    return _eqtest_equal(real(a), real(b)) && _eqtest_equal(imag(a), imag(b))
-end
-
-function _eqtest_symbolic_scalar(a::Complex, b)
-    return _eqtest_equal(real(a), b) && _eqtest_equal(imag(a), 0)
-end
-
-function _eqtest_symbolic_scalar(a, b::Complex)
-    return _eqtest_equal(a, real(b)) && _eqtest_equal(0, imag(b))
-end
+_eqtest_equal(a::Complex, b::Complex) =
+    _eqtest_equal(real(a), real(b)) && _eqtest_equal(imag(a), imag(b))
+_eqtest_equal(a::Complex, b) = _eqtest_equal(real(a), b) && _eqtest_equal(imag(a), 0)
+_eqtest_equal(a, b::Complex) = _eqtest_equal(a, real(b)) && _eqtest_equal(0, imag(b))
 
 function _eqtest_equal(a::AbstractArray, b::AbstractArray)
     size(a) == size(b) || return false
-    for (aa, bb) in zip(a, b)
-        _eqtest_equal(aa, bb) || return false
-    end
-    return true
+    return all(i -> _eqtest_equal(a[i], b[i]), eachindex(a, b))
 end
 
 function _eqtest_equal(a::Tuple, b::Tuple)
     length(a) == length(b) || return false
-    for (aa, bb) in zip(a, b)
-        _eqtest_equal(aa, bb) || return false
-    end
-    return true
+    return all(i -> _eqtest_equal(a[i], b[i]), eachindex(a))
 end
 
-function _eqtest_equal(a::Equation, b::Equation)
-    return _eqtest_equal(a.lhs, b.lhs) && _eqtest_equal(a.rhs, b.rhs)
-end
+_eqtest_equal(a::Equation, b::Equation) = _eqtest_equal(a.lhs, b.lhs) && _eqtest_equal(a.rhs, b.rhs)
 
 function _eqtest_equal(a, b)
     isequal(a, b) && return true
-    if _is_symbolic_like(a) || _is_symbolic_like(b)
-        try
-            return _eqtest_symbolic_scalar(a, b)
-        catch
-            return false
-        end
+    (_is_symbolic_like(a) || _is_symbolic_like(b)) || return false
+    return try
+        _eqtest_symbolic_scalar(a, b)
+    catch
+        false
     end
-    return false
 end
 
 _eqtest_notequal(a, b) = !_eqtest_equal(a, b)
