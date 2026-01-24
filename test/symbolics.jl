@@ -69,12 +69,12 @@ end
         trigs = [cos(f * t), sin(f * t)]
         for (i, trig) in pairs(trigs)
             z = trig_to_exp(trig)
-            @eqtest expand(exp_to_trig(z)) == trig
+            @eqtest simplify(expand(exp_to_trig(z))) == trig
         end
         trigs′ = [cos_euler(f * t), sin_euler(f * t)]
         for (i, trig) in pairs(trigs′)
             z = trig_to_exp(trig)
-            @eqtest expand(exp_to_trig(z)) == trigs[i]
+            @eqtest simplify(expand(exp_to_trig(z))) == trigs[i]
         end
     end
 
@@ -176,24 +176,24 @@ end
     using QuestBase: simplify_complex
     @variables a, b, c
     for z in Complex{Num}[a, a * b, a / b]
-        @test simplify_complex(z).val isa BasicSymbolic{Real}
+        @test simplify_complex(z).val isa BasicSymbolic
     end
 
     z = Complex{Num}(1 + 0 * im)
-    @test simplify_complex(z).val isa Int64
+    @test SymbolicUtils.is_literal_number(simplify_complex(z).val)
 end
 
 @testset "get_all_terms" begin
     using QuestBase: get_all_terms
     @variables a, b, c
 
-    @eqtest get_all_terms(a + b + c) == [a, b, c]
-    @eqtest get_all_terms(a * b * c) == [a, b, c]
-    @eqtest get_all_terms(a / b) == [a, b]
-    @eqtest get_all_terms(a^2 + b^2 + c^2) == [b^2, a^2, c^2]
-    @eqtest get_all_terms(a^2 / b^2) == [a^2, b^2]
-    @eqtest get_all_terms(2 * b^2) == [2, b^2]
-    @eqtest get_all_terms(2 * b^2 ~ a) == [2, b^2, a]
+    @eqtest sort(get_all_terms(a + b + c); by=string) == sort([a, b, c]; by=string)
+    @eqtest sort(get_all_terms(a * b * c); by=string) == sort([a, b, c]; by=string)
+    @eqtest sort(get_all_terms(a / b); by=string) == sort([a, b]; by=string)
+    @eqtest sort(get_all_terms(a^2 + b^2 + c^2); by=string) == sort([a^2, b^2, c^2]; by=string)
+    @eqtest sort(get_all_terms(a^2 / b^2); by=string) == sort([a^2, b^2]; by=string)
+    @eqtest sort(get_all_terms(2 * b^2); by=string) == sort([2, b^2]; by=string)
+    @eqtest sort(get_all_terms(2 * b^2 ~ a); by=string) == sort([2, b^2, a]; by=string)
 end
 
 @testset "get_independent" begin

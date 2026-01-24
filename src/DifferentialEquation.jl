@@ -118,7 +118,7 @@ $(TYPEDSIGNATURES)
 Return the independent dependent variables of `diff_eom`.
 """
 function get_independent_variables(diff_eom::DifferentialEquation)
-    return Num.(flatten(unique([x.val.arguments for x in keys(diff_eom.equations)])))
+    return Num.(flatten(unique([arguments(x.val) for x in keys(diff_eom.equations)])))
 end
 
 """

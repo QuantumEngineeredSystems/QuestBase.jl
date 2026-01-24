@@ -36,9 +36,11 @@ end
 is_trig(f::Num) = is_trig(f.val)
 is_trig(f) = false
 function is_trig(f::BasicSymbolic)
-    f = ispow(f) ? f.base : f
-    isterm(f) && SymbolicUtils.operation(f) ∈ [cos, sin] && return true
-    return false
+    if ispow(f)
+        base, _ = arguments(f)
+        f = base
+    end
+    return isterm(f) && SymbolicUtils.operation(f) ∈ [cos, sin]
 end
 
 """
@@ -66,7 +68,7 @@ function fourier_cos_term(x, ω, t)
 end
 
 "Simplify fraction a/b + c/d = (ad + bc)/bd"
-add_div(x) = wrap(Postwalk(add_with_div; maketerm=frac_maketerm)(unwrap(x)))
+add_div(x) = wrap(Postwalk(add_with_div)(unwrap(x)))
 
 """
     fourier_sin_term(x, ω, t)
@@ -120,35 +122,9 @@ using Euler's formula: ``\\exp(ix) = \\cos(x) + i*\\sin(x)``.
 Returns the converted expression as a `Num` type.
 """
 function trig_to_exp(x::Num)
-    all_terms = get_all_terms(x)
-    trigs = filter(z -> is_trig(z), all_terms)
-
-    rules = []
-    for trig in trigs
-        is_pow = ispow(trig.val) # trig is either a trig or a power of a trig
-        power = is_pow ? trig.val.exp : 1
-        arg = is_pow ? arguments(trig.val.base)[1] : arguments(trig.val)[1]
-        type = is_pow ? operation(trig.val.base) : operation(trig.val)
-
-        if type == cos
-            term = Complex{Num}((exp(im * arg) + exp(-im * arg))^power * (1//2)^power, 0)
-        elseif type == sin
-            term =
-                (1 * im^power) *
-                Complex{Num}(((exp(-im * arg) - exp(im * arg)))^power * (1//2)^power, 0)
-        end
-        # avoid Complex{Num} where possible as this causes bugs
-        # instead, the Nums store SymbolicUtils Complex types
-        term = Num(Symbolics.expand(term.re.val + im * term.im.val))
-        append!(rules, [trig => term])
-    end
-
-    result = Symbolics.substitute(x, Dict(rules))
-    return convert_to_Num(result)
+    return Num(trig_to_exp(x.val))
 end
 trig_to_exp(x::Complex{Num}) = trig_to_exp(x.re) + im * trig_to_exp(x.im)
-convert_to_Num(x::Complex{Num})::Num = Num(first(x.re.val.arguments))
-convert_to_Num(x::Num)::Num = x
 
 """
     trig_to_exp(x::BasicSymbolic)
@@ -163,9 +139,16 @@ function trig_to_exp(x::BasicSymbolic)
     rules = []
     for trig in trigs
         is_pow = ispow(trig) # trig is either a trig or a power of a trig
-        power = is_pow ? trig.exp : 1
-        arg = is_pow ? arguments(trig.base)[1] : arguments(trig)[1]
-        type = is_pow ? operation(trig.base) : operation(trig)
+        if is_pow
+            base, exponent = arguments(trig)
+            power = exponent
+            arg = arguments(base)[1]
+            type = operation(base)
+        else
+            power = 1
+            arg = arguments(trig)[1]
+            type = operation(trig)
+        end
 
         if type == cos
             term = (exp(im * arg) + exp(-im * arg))^power * (1 // 2)^power
@@ -198,8 +181,8 @@ trigonometric arguments for consistent simplification.
 function exp_to_trig(x::BasicSymbolic)
     if isadd(x) || isdiv(x) || ismul(x)
         return _apply_termwise(exp_to_trig, x)
-    elseif isterm(x) && x.f == exp
-        arg = first(x.arguments)
+    elseif isterm(x) && operation(x) === exp
+        arg = first(arguments(x))
         trigarg = Symbolics.expand(-im * arg) # the argument of the to-be trig function
         trigarg = simplify_complex(trigarg)
 
@@ -218,11 +201,16 @@ function exp_to_trig(x::BasicSymbolic)
                 cos(trigarg) + im * sin(trigarg)
             end
         end
-        return if ismul(trigarg) && trigarg.coeff < 0
-            cos(-trigarg) - im * sin(-trigarg)
-        else
-            cos(trigarg) + im * sin(trigarg)
+        if ismul(trigarg)
+            coeff = trigarg.coeff
+            if SymbolicUtils.is_literal_number(coeff)
+                coeff_val = SymbolicUtils.unwrap_const(coeff)
+                if coeff_val isa Real && coeff_val < 0
+                    return cos(-trigarg) - im * sin(-trigarg)
+                end
+            end
         end
+        return cos(trigarg) + im * sin(trigarg)
     else
         return x
     end

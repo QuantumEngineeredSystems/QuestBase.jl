@@ -45,7 +45,11 @@ drop_powers(x, vars, deg::Int) = drop_powers(wrap(x), vars, deg)
 function max_power(x::Num, y::Num)
     terms = get_all_terms(x)
     powers = power_of.(terms, y)
-    return maximum(powers)
+    literal_powers = Int[
+        Int(SymbolicUtils.unwrap_const(p)) for p in powers if SymbolicUtils.is_literal_number(p)
+    ]
+    isempty(literal_powers) && return 0
+    return maximum(literal_powers)
 end
 
 max_power(x::Vector{Num}, y::Num) = maximum(max_power.(x, y))
@@ -60,7 +64,8 @@ end
 
 function power_of(x::BasicSymbolic, y::BasicSymbolic)
     if ispow(x) && issym(y)
-        return isequal(x.base, y) ? x.exp : 0
+        base, exponent = arguments(x)
+        return isequal(base, y) ? exponent : 0
     elseif issym(x) && issym(y)
         return isequal(x, y) ? 1 : 0
     else
