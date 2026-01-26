@@ -22,7 +22,7 @@ using QuestBase:
 
 # Setup common test variables
 @variables t, T
-@variables x(t) y(t) u(T) v(T)
+@variables x(t) y(t) u(T) v(T) w(T)
 D = Differential(T)
 
 # Create simple test equation
@@ -78,6 +78,8 @@ end
     rules = Dict(u => a)
     subbed = substitute_all(heq, rules)
     @test !isequal(subbed.equations, heq.equations)
+    @test !isequal(subbed.variables, heq.variables)
+    @eqtest subbed.variables[1].symbol == a
 end
 
 @testset "Utility functions" begin
@@ -95,4 +97,19 @@ end
     list = get_all_terms.(Symbolics.expand_derivatives.(declared))
     list = unique(filter(x -> !(x isa Real), Symbolics.unwrap.(reduce(vcat, list))))
     @test all(map(x -> !hasproperty(x, :arguments), list))
+end
+
+@testset "is_rearranged MF path" begin
+    # No derivative terms on either side => treated as arranged by construction (MF_bool).
+    eq_alg1 = u ~ u + v
+    eq_alg2 = v ~ u
+    heq_alg = HarmonicEquation([eq_alg1, eq_alg2], [hv1, hv2], nat_eq)
+    @test is_rearranged(heq_alg)
+end
+
+@testset "Hopf variable filtered from ansatz" begin
+    hv_hopf = HarmonicVariable(w, "test", "Hopf", Num(1.0), x)
+    heq_hopf = HarmonicEquation([eq1, eq2], [hv1, hv2, hv_hopf], nat_eq)
+    ans = QuestBase._show_ansatz(heq_hopf)
+    @test !occursin(string(hv_hopf.symbol), ans)
 end

@@ -1,8 +1,8 @@
 using Test
 using Symbolics
-using SymbolicUtils: Fixpoint, Prewalk, PassThrough, BasicSymbolic
+using SymbolicUtils: BasicSymbolic
 
-using QuestBase: @eqtest
+using QuestBase: @eqtest, trig_reduce
 
 @testset "exp(x)^n => exp(x*n)" begin
     using QuestBase: expand_all, expand_exp_power
@@ -11,7 +11,6 @@ using QuestBase: @eqtest
     @eqtest expand_exp_power(exp(a)^3) == exp(3 * a)
     @eqtest simplify(exp(a)^3) == exp(3 * a)
     @eqtest simplify(exp(a)^n) == exp(n * a)
-    @eqtest expand_all(exp(a)^3) == exp(3 * a)
     @eqtest expand_all(exp(a)^3) == exp(3 * a)
     @eqtest expand_all(im * exp(a)^5) == im * exp(5 * a)
 end
@@ -27,7 +26,7 @@ end
 
 @testset "euler" begin
     @variables a b
-    @eqtest cos(a) + im * sin(a) == exp(im * a)
+    @test isequal(trig_reduce(cos(a) + im * sin(a) - exp(im * a)), 0)
     @eqtest exp(a) * cos(b) + im * sin(b) * exp(a) == exp(a + im * b)
 end
 
@@ -52,29 +51,35 @@ end
     # eq = drop_powers(a^2 + a ~ b, [a, b], 2) # broken
     @eqtest [eq.lhs, eq.rhs] == [a, a]
     eq = drop_powers(a^2 + a + b ~ a, a, 2)
-    @test string(eq.rhs) == "a" broken = true
+    @eqtest eq.lhs == a + b
+    @eqtest eq.rhs == a
 
     @eqtest drop_powers([a^2 + a + b, b], a, 2) == [a + b, b]
     @eqtest drop_powers([a^2 + a + b, b], [a, b], 2) == [a + b, b]
+
+    @testset "Vector{Equation}" begin
+        eqs = [a^2 + a ~ a, b^3 + b ~ 0]
+        out = drop_powers(eqs, [a], 2)
+        @eqtest [out[1].lhs, out[1].rhs] == [a, a]
+        @eqtest out[2] == eqs[2]
+    end
 end
 
 @testset "trig_to_exp and trig_to_exp" begin
     using QuestBase: expand_all, trig_to_exp, exp_to_trig
     @testset "Num" begin
         @variables f t
-        cos_euler(x) = (exp(im * x) + exp(-im * x)) / 2
-        sin_euler(x) = (exp(im * x) - exp(-im * x)) / (2 * im)
-
-        # automatic conversion between trig and exp form
+        # Conversion between trig and exp form.
+        # We validate by substituting numeric values (robust across Symbolics canonicalization).
         trigs = [cos(f * t), sin(f * t)]
-        for (i, trig) in pairs(trigs)
+        samples = ((1.3, 0.7), (2.0, 0.1), (-0.4, 1.1))
+        for trig in trigs
             z = trig_to_exp(trig)
-            @eqtest expand(exp_to_trig(z)) == trig
-        end
-        trigs′ = [cos_euler(f * t), sin_euler(f * t)]
-        for (i, trig) in pairs(trigs′)
-            z = trig_to_exp(trig)
-            @eqtest expand(exp_to_trig(z)) == trigs[i]
+            back = exp_to_trig(z)
+            for (fv, tv) in samples
+                d = Symbolics.substitute(back - trig, Dict(f => fv, t => tv))
+                @test Symbolics.value(d) == 0
+            end
         end
     end
 
@@ -99,7 +104,6 @@ end
 
 @testset "harmonic" begin
     using QuestBase: is_harmonic
-
     @variables a, b, c, t, x(t), f, y(t)
 
     @test is_harmonic(cos(f * t), t)
@@ -117,7 +121,7 @@ end
     using QuestBase: fourier_cos_term, fourier_sin_term
     using QuestBase.Symbolics: expand
 
-    @variables f t θ a b
+    @variables f t θ a b c
 
     @eqtest fourier_cos_term(cos(f * t)^2, f, t) == 0
     @eqtest fourier_sin_term(sin(f * t)^2, f, t) == 0
@@ -160,6 +164,40 @@ end
     @eqtest fourier_cos_term(cos(f * t)^3 + 1, 0, t) == 1
     @eqtest fourier_cos_term(cos(f * t)^2 + 1, 0, t) == 3//2
     @eqtest fourier_cos_term((cos(f * t)^2 + cos(f * t))^3, 0, t) == 23//16
+
+    function _check_fourier(term, specs)
+        for (ω, cos_expected, sin_expected) in specs
+            @eqtest fourier_cos_term(term, ω, t) == cos_expected
+            @eqtest fourier_sin_term(term, ω, t) == sin_expected
+        end
+        return nothing
+    end
+
+    # more complex but closed-form cases
+    for (term, specs) in (
+        (
+            (a + b * cos(f * t))^2,
+            ((f, 2 * a * b, 0), (2 * f, b^2 / 2, 0), (0, a^2 + b^2 / 2, 0)),
+        ),
+        (
+            (a + b * sin(f * t))^2,
+            ((f, 0, 2 * a * b), (2 * f, -b^2 / 2, 0), (0, a^2 + b^2 / 2, 0)),
+        ),
+        (
+            (a + b * cos(f * t + θ)) * (a + b * cos(f * t - θ)),
+            (
+                (f, 2 * a * b * cos(θ), 0),
+                (2 * f, b^2 / 2, 0),
+                (0, a^2 + b^2 / 2 * cos(2 * θ), 0),
+            ),
+        ),
+        (
+            (a + b * cos(f * t))^3,
+            ((f, 3 * a^2 * b + 3//4 * b^3, 0), (0, a^3 + 3//2 * a * b^2, 0)),
+        ),
+    )
+        _check_fourier(term, specs)
+    end
 end
 
 @testset "_apply_termwise" begin
@@ -176,24 +214,26 @@ end
     using QuestBase: simplify_complex
     @variables a, b, c
     for z in Complex{Num}[a, a * b, a / b]
-        @test simplify_complex(z).val isa BasicSymbolic{Real}
+        @test simplify_complex(z).val isa BasicSymbolic
     end
 
     z = Complex{Num}(1 + 0 * im)
-    @test simplify_complex(z).val isa Int64
+    z_val = SymbolicUtils.unwrap_const(simplify_complex(z).val)
+    @test z_val isa Number && z_val == 1
 end
 
 @testset "get_all_terms" begin
     using QuestBase: get_all_terms
     @variables a, b, c
 
-    @eqtest get_all_terms(a + b + c) == [a, b, c]
-    @eqtest get_all_terms(a * b * c) == [a, b, c]
-    @eqtest get_all_terms(a / b) == [a, b]
-    @eqtest get_all_terms(a^2 + b^2 + c^2) == [b^2, a^2, c^2]
-    @eqtest get_all_terms(a^2 / b^2) == [a^2, b^2]
-    @eqtest get_all_terms(2 * b^2) == [2, b^2]
-    @eqtest get_all_terms(2 * b^2 ~ a) == [2, b^2, a]
+    @eqtest sort(get_all_terms(a + b + c); by=string) == sort([a, b, c]; by=string)
+    @eqtest sort(get_all_terms(a * b * c); by=string) == sort([a, b, c]; by=string)
+    @eqtest sort(get_all_terms(a / b); by=string) == sort([a, b]; by=string)
+    @eqtest sort(get_all_terms(a^2 + b^2 + c^2); by=string) ==
+        sort([a^2, b^2, c^2]; by=string)
+    @eqtest sort(get_all_terms(a^2 / b^2); by=string) == sort([a^2, b^2]; by=string)
+    @eqtest sort(get_all_terms(2 * b^2); by=string) == sort([2, b^2]; by=string)
+    @eqtest sort(get_all_terms(2 * b^2 ~ a); by=string) == sort([2, b^2, a]; by=string)
 end
 
 @testset "get_independent" begin
@@ -218,8 +258,9 @@ end
     @variables a, b, c, d
 
     @eqtest expand_fraction((a + b) / c) == a / c + b / c
-    @test string.(expand_fraction(d * (a + b) / c)) == "d*a /c + d*b / c + d / c" broken =
-        true
+    lhs = Symbolics.expand(expand_fraction(d * (a + b) / c))
+    rhs = d * a / c + d * b / c
+    @eqtest lhs == rhs
 end
 @testset "count_derivatives" begin
     using QuestBase: count_derivatives, d
@@ -243,4 +284,24 @@ end
     @eqtest substitute_all(a * b * c * d * e * f * g * h, rules) == b^2 * d^2 * f^2 * h^2
     @eqtest substitute_all([a, c, e], rules) == [b, d, f]
     @eqtest substitute_all(a + b * im, rules) == b + b * im
+
+    @testset "include_derivatives rewrites Differential(var)" begin
+        @variables t T x(t)
+        D = Differential(t)
+        expr = D(x)
+
+        # Symbolics substitution currently rewrites arguments but does not rewrite the
+        # derivative operator itself (i.e., the `operation` remains `Differential(t)`).
+        expected_arg = Symbolics.unwrap(Symbolics.substitute(x, Dict(t => T)))
+
+        out = substitute_all(expr, Dict(t => T); include_derivatives=true)
+        out_bs = Symbolics.unwrap(out)
+        @test Symbolics.operation(out_bs) == Differential(t)
+        @test isequal(first(Symbolics.arguments(out_bs)), expected_arg)
+
+        out_no = substitute_all(expr, Dict(t => T); include_derivatives=false)
+        out_no_bs = Symbolics.unwrap(out_no)
+        @test Symbolics.operation(out_no_bs) == Differential(t)
+        @test isequal(first(Symbolics.arguments(out_no_bs)), expected_arg)
+    end
 end

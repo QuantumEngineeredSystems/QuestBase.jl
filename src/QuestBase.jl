@@ -7,27 +7,23 @@ using LinearAlgebra: LinearAlgebra
 using SymbolicUtils:
     SymbolicUtils,
     Postwalk,
-    Sym,
     BasicSymbolic,
+    unwrap,
     isterm,
     ispow,
     isadd,
     isdiv,
     ismul,
     add_with_div,
-    frac_maketerm,
-    @compactified,
     issym
 
 using Symbolics:
     Symbolics,
     Num,
-    unwrap,
     wrap,
     get_variables,
     Equation,
     Differential,
-    @variables,
     arguments,
     substitute,
     term,
