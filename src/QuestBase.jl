@@ -17,6 +17,8 @@ using SymbolicUtils:
     add_with_div,
     issym
 
+using SymbolicUtils.Unityper: @compactified
+
 using Symbolics:
     Symbolics,
     Num,
