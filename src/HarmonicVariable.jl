@@ -43,7 +43,7 @@ function _show_ansatz(var::HarmonicVariable)
     if isempty(var.type)
         return string(var.symbol)
     end
-    t = var.natural_variable.val.arguments
+    t = arguments(var.natural_variable.val)
     t = length(t) == 1 ? string(t[1]) : error("more than 1 independent variable")
     ω = string(var.ω)
     terms = Dict("u" => "*cos(" * ω * t * ")", "v" => "*sin(" * ω * t * ")", "a" => "")

@@ -118,7 +118,7 @@ $(TYPEDSIGNATURES)
 Return the independent dependent variables of `diff_eom`.
 """
 function get_independent_variables(diff_eom::DifferentialEquation)
-    return Num.(flatten(unique([x.val.arguments for x in keys(diff_eom.equations)])))
+    return Num.(flatten(unique([arguments(x.val) for x in keys(diff_eom.equations)])))
 end
 
 """
@@ -163,7 +163,10 @@ corresponding to second-order differential equations.
 function is_rearranged_standard(eom::DifferentialEquation, degree=2)
     tvar = get_independent_variables(eom)[1]
     D = Differential(tvar)^degree
-    return isequal(getfield.(values(eom.equations), :lhs), D.(get_variables(eom)))
+    lhs = getfield.(values(eom.equations), :lhs)
+    rhs = D.(get_variables(eom))
+    diffs = Symbolics.simplify.(lhs .- rhs)
+    return all(is_literal_zero, diffs)
 end
 
 """
@@ -195,7 +198,7 @@ function rearrange!(eom::DifferentialEquation, new_lhs::Vector{Num})
     return nothing
 end
 function get_variables_nums(vars::Vector{Num})
-    unique(flatten([Num.(get_variables(x)) for x in vars]))
+    return strip_derivative.(vars)
 end # TODO: remove this function or at least better names
 
 """
