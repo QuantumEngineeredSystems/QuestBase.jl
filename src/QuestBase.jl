@@ -16,8 +16,9 @@ using SymbolicUtils:
     ismul,
     add_with_div,
     frac_maketerm,
-    @compactified,
     issym
+
+using SymbolicUtils.Unityper: @compactified
 
 using Symbolics:
     Symbolics,
@@ -27,7 +28,6 @@ using Symbolics:
     get_variables,
     Equation,
     Differential,
-    @variables,
     arguments,
     substitute,
     term,
