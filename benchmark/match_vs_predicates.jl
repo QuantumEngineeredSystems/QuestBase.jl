@@ -23,7 +23,8 @@ using QuestBase:
     is_function,
     power_of,
     is_trig
-using Symbolics: Symbolics, @variables, unwrap, expand, Num, Equation, Differential, substitute
+using Symbolics:
+    Symbolics, @variables, unwrap, expand, Num, Equation, Differential, substitute
 using SymbolicUtils:
     SymbolicUtils,
     BasicSymbolic,
@@ -71,14 +72,14 @@ function expand_exp_power_match(expr::BasicSymbolic)
         else  # MUL
             prod(expand_exp_power_match(arg) for arg in args)
         end
-        BSImpl.Term(; f, args) && if f === (^) end =>
-            let base = args[1]
-                if isterm(base) && operation(base) === exp
-                    exp(arguments(base)[1] * args[2])
-                else
-                    expr
-                end
+        BSImpl.Term(; f, args) && if f === (^)
+        end => let base = args[1]
+            if isterm(base) && operation(base) === exp
+                exp(arguments(base)[1] * args[2])
+            else
+                expr
             end
+        end
         _ => expr
     end
 end
@@ -92,16 +93,15 @@ function simplify_exp_products_match(expr::BasicSymbolic)
         else  # MUL
             _simplify_exp_products_mul(expr)
         end
-        BSImpl.Div() =>
-            _apply_termwise_match(simplify_exp_products_match, expr)
-        BSImpl.Term(; f, args) && if f === (^) end =>
-            let base = args[1]
-                if isterm(base) && operation(base) === exp
-                    exp(arguments(base)[1] * args[2])
-                else
-                    expr
-                end
+        BSImpl.Div() => _apply_termwise_match(simplify_exp_products_match, expr)
+        BSImpl.Term(; f, args) && if f === (^)
+        end => let base = args[1]
+            if isterm(base) && operation(base) === exp
+                exp(arguments(base)[1] * args[2])
+            else
+                expr
             end
+        end
         _ => expr
     end
 end
@@ -146,8 +146,7 @@ _get_all_terms_match(x) = x
 # --- 6. expand_fraction (2 branches: isadd/ismul, isdiv) ---
 function expand_fraction_match(x::BasicSymbolic)
     @match x begin
-        BSImpl.AddMul() =>
-            _apply_termwise_match(expand_fraction_match, x)
+        BSImpl.AddMul() => _apply_termwise_match(expand_fraction_match, x)
         BSImpl.Div(; num, den) => begin
             num_expanded = SymbolicUtils.expand(num)
             if isadd(num_expanded)
@@ -192,10 +191,10 @@ end
 # --- 9. power_of (2 branches: ispow+issym, issym+issym) ---
 function power_of_match(x::BasicSymbolic, y::BasicSymbolic)
     @match x begin
-        BSImpl.Term(; f, args) && if f === (^) && issym(y) end =>
-            isequal(args[1], y) ? unwrap_const(args[2]) : 0
-        BSImpl.Sym() && if issym(y) end =>
-            isequal(x, y) ? 1 : 0
+        BSImpl.Term(; f, args) && if f === (^) && issym(y)
+        end => isequal(args[1], y) ? unwrap_const(args[2]) : 0
+        BSImpl.Sym() && if issym(y)
+        end => isequal(x, y) ? 1 : 0
         _ => 0
     end
 end
@@ -204,12 +203,11 @@ power_of_match(x, y) = 0
 # --- 10. is_trig (1 branch: ispow) ---
 function is_trig_match(f::BasicSymbolic)
     @match f begin
-        BSImpl.Term(; f=op, args) && if op === (^) end =>
-            let base = args[1]
-                isterm(base) && operation(base) ∈ [cos, sin]
-            end
-        BSImpl.Term(; f=op) =>
-            op ∈ [cos, sin]
+        BSImpl.Term(; f=op, args) && if op === (^)
+        end => let base = args[1]
+            isterm(base) && operation(base) ∈ [cos, sin]
+        end
+        BSImpl.Term(; f=op) => op ∈ [cos, sin]
         _ => false
     end
 end
@@ -255,7 +253,13 @@ function compare(name, f_pred, f_match, args...)
     med_pred = median(t_pred).time
     med_match = median(t_match).time
     ratio = med_pred / med_match
-    status = ratio > 1.05 ? "@match FASTER" : ratio < 0.95 ? "predicates FASTER" : "~same"
+    status = if ratio > 1.05
+        "@match FASTER"
+    elseif ratio < 0.95
+        "predicates FASTER"
+    else
+        "~same"
+    end
     println("  predicates: $(round(med_pred, digits=1)) ns")
     println("  @match:     $(round(med_match, digits=1)) ns")
     println("  ratio:      $(round(ratio, digits=2))x  ($status)")
@@ -265,28 +269,88 @@ end
 results = []
 
 # 1. _apply_termwise
-push!(results, compare("_apply_termwise (add)", _apply_termwise, _apply_termwise_match, simplify_complex, expr_add))
-push!(results, compare("_apply_termwise (mul)", _apply_termwise, _apply_termwise_match, simplify_complex, expr_mul))
-push!(results, compare("_apply_termwise (div)", _apply_termwise, _apply_termwise_match, simplify_complex, expr_div))
+push!(
+    results,
+    compare(
+        "_apply_termwise (add)",
+        _apply_termwise,
+        _apply_termwise_match,
+        simplify_complex,
+        expr_add,
+    ),
+)
+push!(
+    results,
+    compare(
+        "_apply_termwise (mul)",
+        _apply_termwise,
+        _apply_termwise_match,
+        simplify_complex,
+        expr_mul,
+    ),
+)
+push!(
+    results,
+    compare(
+        "_apply_termwise (div)",
+        _apply_termwise,
+        _apply_termwise_match,
+        simplify_complex,
+        expr_div,
+    ),
+)
 
 # 2. expand_exp_power
-push!(results, compare("expand_exp_power", expand_exp_power, expand_exp_power_match, expr_exp_pow))
+push!(
+    results,
+    compare("expand_exp_power", expand_exp_power, expand_exp_power_match, expr_exp_pow),
+)
 
 # 3. simplify_exp_products
-push!(results, compare("simplify_exp_products", simplify_exp_products, simplify_exp_products_match, expr_exp_prod))
+push!(
+    results,
+    compare(
+        "simplify_exp_products",
+        simplify_exp_products,
+        simplify_exp_products_match,
+        expr_exp_prod,
+    ),
+)
 
 # 4. get_independent (most branches — expected biggest win)
-push!(results, compare("get_independent (simple)", get_independent, get_independent_match, expr_indep_simple, t))
-push!(results, compare("get_independent (trig)", get_independent, get_independent_match, expr_indep_trig, t))
+push!(
+    results,
+    compare(
+        "get_independent (simple)",
+        get_independent,
+        get_independent_match,
+        expr_indep_simple,
+        t,
+    ),
+)
+push!(
+    results,
+    compare(
+        "get_independent (trig)", get_independent, get_independent_match, expr_indep_trig, t
+    ),
+)
 
 # 5. _get_all_terms
-push!(results, compare("_get_all_terms", QuestBase._get_all_terms, _get_all_terms_match, expr_add))
+push!(
+    results,
+    compare("_get_all_terms", QuestBase._get_all_terms, _get_all_terms_match, expr_add),
+)
 
 # 6. expand_fraction
-push!(results, compare("expand_fraction", expand_fraction, expand_fraction_match, expr_frac))
+push!(
+    results, compare("expand_fraction", expand_fraction, expand_fraction_match, expr_frac)
+)
 
 # 7. simplify_complex
-push!(results, compare("simplify_complex (add)", simplify_complex, simplify_complex_match, expr_add))
+push!(
+    results,
+    compare("simplify_complex (add)", simplify_complex, simplify_complex_match, expr_add),
+)
 
 # 8. exp_to_trig
 push!(results, compare("exp_to_trig", exp_to_trig, exp_to_trig_match, exp_sum))
@@ -307,6 +371,14 @@ println()
 println("| Function | Predicates (ns) | @match (ns) | Ratio | Winner |")
 println("|---|---|---|---|---|")
 for r in results
-    status = r.ratio > 1.05 ? "@match" : r.ratio < 0.95 ? "predicates" : "~same"
-    println("| $(r.name) | $(round(r.pred_ns, digits=1)) | $(round(r.match_ns, digits=1)) | $(round(r.ratio, digits=2))x | $status |")
+    status = if r.ratio > 1.05
+        "@match"
+    elseif r.ratio < 0.95
+        "predicates"
+    else
+        "~same"
+    end
+    println(
+        "| $(r.name) | $(round(r.pred_ns, digits=1)) | $(round(r.match_ns, digits=1)) | $(round(r.ratio, digits=2))x | $status |",
+    )
 end
