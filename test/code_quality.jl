@@ -13,7 +13,12 @@ end
     using JET
     rep = report_package(QuestBase; target_modules=(QuestBase,))
     @show rep
-    @test length(JET.get_reports(rep)) == 0
+    # Filter out Moshi @match false positives: generated variable bindings
+    # in pattern match arms trigger "may be undefined" warnings in JET
+    real_reports = filter(JET.get_reports(rep)) do r
+        !contains(string(r), "##Call#") && !contains(string(r), "##And#")
+    end
+    @test length(real_reports) == 0
 end
 
 @testset "Code quality" begin

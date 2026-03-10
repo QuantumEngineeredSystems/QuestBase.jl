@@ -52,7 +52,6 @@ end
     a^2 + a ~ a
     eq = drop_powers(a^2 + a ~ a, a, 2)
     @eqtest [eq.lhs, eq.rhs] == [a, a]
-    # eq = drop_powers(a^2 + a ~ b, [a, b], 2) # broken
     @eqtest [eq.lhs, eq.rhs] == [a, a]
     eq = drop_powers(a^2 + a + b ~ a, a, 2)
     @test string(eq.rhs) == "a"

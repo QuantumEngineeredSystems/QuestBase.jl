@@ -11,13 +11,15 @@ using SymbolicUtils:
     isterm,
     ispow,
     isadd,
-    isdiv,
-    ismul,
     issym,
     add_with_div,
     is_literal_number,
     unwrap_const,
-    unwrap
+    unwrap,
+    AddMulVariant
+
+using Moshi.Match: @match
+const BSImpl = SymbolicUtils.BasicSymbolicImpl
 
 using Symbolics:
     Symbolics,

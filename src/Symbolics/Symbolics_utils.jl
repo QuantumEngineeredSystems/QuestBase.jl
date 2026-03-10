@@ -10,48 +10,49 @@ end
 expand_all(x::Complex{Num}) = expand_all(x.re) + im * expand_all(x.im)
 
 function expand_fraction(x::BasicSymbolic)
-    if isadd(x) || ismul(x)
-        _apply_termwise(expand_fraction, x)
-    elseif isdiv(x)
-        args = arguments(x)
-        num = SymbolicUtils.expand(args[1])
-        if isadd(num)
-            sum(expand_fraction(arg / args[2]) for arg in arguments(num))
-        else
-            x
+    @match x begin
+        BSImpl.AddMul() => _apply_termwise(expand_fraction, x)
+        BSImpl.Div(; num, den) => begin
+            # Expand the numerator only if it's not already a sum
+            # This is cheaper than full SymbolicUtils.expand for simple products
+            expanded = isadd(num) ? num : SymbolicUtils.expand(num)
+            if isadd(expanded)
+                sum(expand_fraction(arg / den) for arg in arguments(expanded))
+            else
+                x
+            end
         end
-    else
-        x
+        _ => x
     end
 end
 expand_fraction(x::Num) = Num(expand_fraction(unwrap(x)))
 
 "Apply a function f on every member of a sum or a product"
 function _apply_termwise(f, x::BasicSymbolic)
-    if isadd(x)
-        sum(f(arg) for arg in arguments(x))
-    elseif ismul(x)
-        prod(f(arg) for arg in arguments(x))
-    elseif isdiv(x)
-        args = arguments(x)
-        _apply_termwise(f, args[1]) / _apply_termwise(f, args[2])
-    else
-        f(x)
+    @match x begin
+        BSImpl.AddMul(; variant) => if variant == AddMulVariant.ADD
+            sum(f(arg) for arg in arguments(x))
+        else  # MUL
+            prod(f(arg) for arg in arguments(x))
+        end
+        BSImpl.Div(; num, den) => _apply_termwise(f, num) / _apply_termwise(f, den)
+        _ => f(x)
     end
 end
 
 simplify_complex(x::Complex) = isequal(x.im, 0) ? x.re : x.re + im * x.im
 simplify_complex(x) = x
 function simplify_complex(x::BasicSymbolic)
-    if isadd(x) || ismul(x) || isdiv(x)
-        _apply_termwise(simplify_complex, x)
-    else
-        # Handle Const-wrapped complex numbers with zero imaginary part
-        v = unwrap_const(x)
-        if v isa Complex && iszero(imag(v))
-            return real(v)
+    @match x begin
+        BSImpl.AddMul() => _apply_termwise(simplify_complex, x)
+        BSImpl.Div() => _apply_termwise(simplify_complex, x)
+        _ => begin
+            v = unwrap_const(x)
+            if v isa Complex && iszero(imag(v))
+                return real(v)
+            end
+            x
         end
-        x
     end
 end
 
@@ -86,20 +87,20 @@ get_independent(v::Vector{Num}, t::Num) = [get_independent(el, t) for el in v]
 get_independent(x, t::Num) = x
 
 function get_independent(x::BasicSymbolic, t::Num)
-    if isadd(x)
-        sum(get_independent(arg, t) for arg in arguments(x))
-    elseif ismul(x)
-        prod(get_independent(arg, t) for arg in arguments(x))
-    elseif isdiv(x)
-        args = arguments(x)
-        !is_function(args[2], t) ? get_independent(args[1], t) / args[2] : 0
-    elseif ispow(x)
-        args = arguments(x)
-        !is_function(args[1], t) && !is_function(args[2], t) ? x : 0
-    elseif isterm(x) || issym(x)
-        !is_function(x, t) ? x : 0
-    else
-        x
+    @match x begin
+        BSImpl.AddMul(; variant) => if variant == AddMulVariant.ADD
+            sum(get_independent(arg, t) for arg in arguments(x))
+        else  # MUL
+            prod(get_independent(arg, t) for arg in arguments(x))
+        end
+        BSImpl.Div(; num, den) => !is_function(den, t) ? get_independent(num, t) / den : 0
+        BSImpl.Term(; f, args) => if f === (^)
+            !is_function(args[1], t) && !is_function(args[2], t) ? x : 0
+        else
+            !is_function(x, t) ? x : 0
+        end
+        BSImpl.Sym() => !is_function(x, t) ? x : 0
+        _ => x
     end
 end
 
@@ -110,15 +111,14 @@ function get_all_terms(x::Equation)
     return unique(cat(get_all_terms(Num(x.lhs)), get_all_terms(Num(x.rhs)); dims=1))
 end
 function _get_all_terms(x::BasicSymbolic)
-    if isadd(x)
-        vcat([_get_all_terms(arg) for arg in arguments(x)]...)
-    elseif ismul(x)
-        arguments(x)
-    elseif isdiv(x)
-        args = arguments(x)
-        [_get_all_terms(args[1])..., _get_all_terms(args[2])...]
-    else
-        [x]
+    @match x begin
+        BSImpl.AddMul(; variant) => if variant == AddMulVariant.ADD
+            vcat([_get_all_terms(arg) for arg in arguments(x)]...)
+        else  # MUL
+            arguments(x)
+        end
+        BSImpl.Div(; num, den) => [_get_all_terms(num)..., _get_all_terms(den)...]
+        _ => [x]
     end
 end
 _get_all_terms(x) = x
@@ -147,13 +147,17 @@ is_function(f, var) = unwrap(var) in get_variables(f)
 Counts the number of derivatives of a symbolic variable.
 """
 function count_derivatives(x::BasicSymbolic)
-    (isterm(x) || issym(x)) || error("The input is not a single term or symbol")
-    if is_derivative(x)
-        # In Symbolics v7, Differential stores the order directly
-        op = operation(x)
-        return op.order
-    else
-        return 0
+    @match x begin
+        BSImpl.Term() => begin
+            if is_derivative(x)
+                op = operation(x)
+                return op.order
+            else
+                return 0
+            end
+        end
+        BSImpl.Sym() => 0
+        _ => error("The input is not a single term or symbol")
     end
 end
 count_derivatives(x::Num) = count_derivatives(unwrap(x))
