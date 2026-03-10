@@ -88,7 +88,7 @@ end
 "when HV is used for substitute, substitute its symbol"
 function QuestBase.substitute_all(eq::Union{Num,Equation}, rules::Dict{HarmonicVariable})
     return Symbolics.substitute(
-        eq, Dict(zip(getfield.(keys(rules), :symbol), values(rules)))
+        eq, Dict{Num,Any}(zip(map(hv -> hv.symbol, keys(rules)), values(rules)))
     )
 end
 

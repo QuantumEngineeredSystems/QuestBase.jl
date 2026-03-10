@@ -87,10 +87,6 @@ function Base.show(io::IO, diff_eq::DifferentialEquation)
     println(io, "\n")
     return [println(io, eq) for eq in values(diff_eq.equations)]
 end
-"
-Displays the fields of the differential equation object.
-"
-Base.show(eom::DifferentialEquation) = show_fields(eom)
 
 """
 $(TYPEDSIGNATURES)

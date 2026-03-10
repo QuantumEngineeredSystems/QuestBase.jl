@@ -145,6 +145,8 @@ function trig_to_exp(x::Num)
         elseif type == sin
             # sin(x)^n = (im^n) * ((exp(-ix) - exp(ix))/2)^n
             inner = im^power * ((exp(-im * arg) - exp(im * arg)))^power * (1//2)^power
+        else
+            continue
         end
         term = Num(Symbolics.expand(inner))
         append!(rules, [trig => term])
@@ -181,6 +183,8 @@ function trig_to_exp(x::BasicSymbolic)
         elseif type == sin
             term =
                 (1 * im^power) * ((exp(-im * arg) - exp(im * arg)))^power * (1 // 2)^power
+        else
+            continue
         end
 
         append!(rules, [trig => term])
