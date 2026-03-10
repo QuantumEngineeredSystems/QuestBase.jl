@@ -16,12 +16,12 @@ using SymbolicUtils:
     issym,
     add_with_div,
     is_literal_number,
-    unwrap_const
+    unwrap_const,
+    unwrap
 
 using Symbolics:
     Symbolics,
     Num,
-    unwrap,
     wrap,
     get_variables,
     Equation,

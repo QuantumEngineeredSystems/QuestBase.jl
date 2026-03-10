@@ -123,9 +123,7 @@ SUITE["fourier"]["trig_to_exp_product"] = @benchmarkable trig_to_exp($trig_expr_
 exp_sum = unwrap(exp(im * a) + exp(-im * a) + exp(im * (a + b)))
 SUITE["fourier"]["exp_to_trig_sum"] = @benchmarkable exp_to_trig($exp_sum)
 
-SUITE["fourier"]["add_div"] = @benchmarkable add_div(
-    $(a / (b + c) + b / (a + c))
-)
+SUITE["fourier"]["add_div"] = @benchmarkable add_div($(a / (b + c) + b / (a + c)))
 
 SUITE["fourier"]["trig_reduce_simple"] = @benchmarkable trig_reduce($trig_expr_sq)
 SUITE["fourier"]["trig_reduce_product"] = @benchmarkable trig_reduce($trig_expr_product)
@@ -203,13 +201,12 @@ SUITE["construction"]["DifferentialEquation_coupled"] = @benchmarkable Different
 
 # Rearrangement benchmark
 diff_eq_for_rearrange = DifferentialEquation(
-    [d(x, t, 2) + ω0^2 * x - k * y ~ F * cos(ω * t),
-     d(y, t, 2) + ω0^2 * y - k * x ~ 0],
+    [d(x, t, 2) + ω0^2 * x - k * y ~ F * cos(ω * t), d(y, t, 2) + ω0^2 * y - k * x ~ 0],
     [x, y],
 )
-SUITE["construction"]["rearrange_standard"] = @benchmarkable rearrange_standard!(
-    eom
-) setup = (eom = deepcopy($diff_eq_for_rearrange))
+SUITE["construction"]["rearrange_standard"] = @benchmarkable rearrange_standard!(eom) setup = (
+    eom = deepcopy($diff_eq_for_rearrange)
+)
 
 # ==========================================================================
 # Harmonic checks
