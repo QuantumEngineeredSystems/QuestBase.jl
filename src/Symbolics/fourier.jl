@@ -191,6 +191,54 @@ function trig_to_exp(x::BasicSymbolic)
     return Symbolics.substitute(x, Dict(rules))
 end
 
+"Convert a single exp(arg) node to trig form with sign normalization.
+Returns `nothing` if the node is not an exp call (for use with PassThrough)."
+function _exp_to_trig_node(x::BasicSymbolic)
+    !(isterm(x) && operation(x) === exp) && return nothing
+
+    arg = first(arguments(x))
+
+    # exp(0) = 1: handle literal zero argument
+    arg_val = arg isa BasicSymbolic ? unwrap_const(arg) : arg
+    if arg_val isa Number && iszero(arg_val)
+        return 1
+    end
+
+    trigarg = Symbolics.expand(-im * arg) # the argument of the to-be trig function
+    trigarg = simplify_complex(trigarg)
+
+    # After expansion and simplification, check if trigarg is zero (exp(0) = 1)
+    ta_val = trigarg isa BasicSymbolic ? unwrap_const(trigarg) : trigarg
+    if ta_val isa Number && iszero(ta_val)
+        return 1
+    end
+
+    # put arguments of trigs into a standard form such that sin(x) = -sin(-x), cos(x) = cos(-x) are recognized
+    if isadd(trigarg)
+        first_symbol = minimum(
+            cat(
+                string.(sorted_arguments(trigarg)),
+                string.(sorted_arguments(-trigarg));
+                dims=1,
+            ),
+        )
+
+        # put trigarg => -trigarg the lowest alphabetic argument of trigarg is lower than that of -trigarg
+        # this is a meaningless key but gives unique signs to all sums
+        is_first = minimum(string.(sorted_arguments(trigarg))) == first_symbol
+        return if is_first
+            cos(-trigarg) - im * sin(-trigarg)
+        else
+            cos(trigarg) + im * sin(trigarg)
+        end
+    end
+    return if ismul(trigarg) && _has_negative_coefficient(trigarg)
+        cos(-trigarg) - im * sin(-trigarg)
+    else
+        cos(trigarg) + im * sin(trigarg)
+    end
+end
+
 """
     exp_to_trig(x::BasicSymbolic)
     exp_to_trig(x)
@@ -210,51 +258,9 @@ trigonometric arguments for consistent simplification.
 function exp_to_trig(x::BasicSymbolic)
     if isadd(x) || isdiv(x) || ismul(x)
         return _apply_termwise(exp_to_trig, x)
-    elseif isterm(x) && operation(x) === exp
-        arg = first(arguments(x))
-
-        # exp(0) = 1: handle literal zero argument
-        arg_val = arg isa BasicSymbolic ? unwrap_const(arg) : arg
-        if arg_val isa Number && iszero(arg_val)
-            return 1
-        end
-
-        trigarg = Symbolics.expand(-im * arg) # the argument of the to-be trig function
-        trigarg = simplify_complex(trigarg)
-
-        # After expansion and simplification, check if trigarg is zero (exp(0) = 1)
-        ta_val = trigarg isa BasicSymbolic ? unwrap_const(trigarg) : trigarg
-        if ta_val isa Number && iszero(ta_val)
-            return 1
-        end
-
-        # put arguments of trigs into a standard form such that sin(x) = -sin(-x), cos(x) = cos(-x) are recognized
-        if isadd(trigarg)
-            first_symbol = minimum(
-                cat(
-                    string.(sorted_arguments(trigarg)),
-                    string.(sorted_arguments(-trigarg));
-                    dims=1,
-                ),
-            )
-
-            # put trigarg => -trigarg the lowest alphabetic argument of trigarg is lower than that of -trigarg
-            # this is a meaningless key but gives unique signs to all sums
-            is_first = minimum(string.(sorted_arguments(trigarg))) == first_symbol
-            return if is_first
-                cos(-trigarg) - im * sin(-trigarg)
-            else
-                cos(trigarg) + im * sin(trigarg)
-            end
-        end
-        return if ismul(trigarg) && _has_negative_coefficient(trigarg)
-            cos(-trigarg) - im * sin(-trigarg)
-        else
-            cos(trigarg) + im * sin(trigarg)
-        end
-    else
-        return x
     end
+    result = _exp_to_trig_node(x)
+    return isnothing(result) ? x : result
 end
 
 "Check if a Mul expression has a negative leading coefficient"
