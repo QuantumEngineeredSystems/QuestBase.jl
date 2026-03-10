@@ -162,9 +162,8 @@ SUITE["construction"]["DifferentialEquation_single"] = @benchmarkable Differenti
     d($x, $t, 2) + $ω0^2 * $x ~ $F * cos($ω * $t), $x
 )
 SUITE["construction"]["DifferentialEquation_coupled"] = @benchmarkable DifferentialEquation(
-    [d($x, $t, 2) + $ω0^2 * $x - $k * $y, d($y, $t, 2) + $ω0^2 * $y - $k * $x] .~ [
-        $F * cos($ω * $t), 0
-    ],
+    [d($x, $t, 2) + $ω0^2 * $x - $k * $y, d($y, $t, 2) + $ω0^2 * $y - $k * $x] .~
+    [$F * cos($ω * $t), 0],
     [$x, $y],
 )
 
