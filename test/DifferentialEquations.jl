@@ -30,8 +30,9 @@ using QuestBase:
 
     # Multiple equations constructor
     eqs =
-        [d(x, t, 2) + ω0^2 * x - k * y, d(y, t, 2) + ω0^2 * y - k * x] .~
-        [F * cos(ω * t), 0]
+        [d(x, t, 2) + ω0^2 * x - k * y, d(y, t, 2) + ω0^2 * y - k * x] .~ [
+            F * cos(ω * t), 0
+        ]
     vars = [x, y]
     diff_eq2 = DifferentialEquation(eqs, vars)
     @test length(diff_eq2.equations) == 2

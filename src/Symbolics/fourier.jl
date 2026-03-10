@@ -179,10 +179,9 @@ function trig_to_exp(x::BasicSymbolic)
         type = operation(base)
 
         if type == cos
-            term = (exp(im * arg) + exp(-im * arg))^power * (1 // 2)^power
+            term = (exp(im * arg) + exp(-im * arg))^power * (1//2)^power
         elseif type == sin
-            term =
-                (1 * im^power) * ((exp(-im * arg) - exp(im * arg)))^power * (1 // 2)^power
+            term = (1 * im^power) * ((exp(-im * arg) - exp(im * arg)))^power * (1//2)^power
         else
             continue
         end

@@ -34,7 +34,9 @@ function simplify_exp_products(expr::BasicSymbolic)
     end
 end
 function simplify_exp_products(x::Complex{Num})
-    return Complex{Num}(simplify_exp_products(unwrap(x.re)), simplify_exp_products(unwrap(x.im)))
+    return Complex{Num}(
+        simplify_exp_products(unwrap(x.re)), simplify_exp_products(unwrap(x.im))
+    )
 end
 function simplify_exp_products_mul(expr)
     ind = findall(x -> isexp(x), arguments(expr))

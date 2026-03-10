@@ -147,8 +147,7 @@ is_function(f, var) = any(isequal.(get_variables(f), var))
 Counts the number of derivatives of a symbolic variable.
 """
 function count_derivatives(x::BasicSymbolic)
-    (isterm(x) || issym(x)) ||
-        error("The input is not a single term or symbol")
+    (isterm(x) || issym(x)) || error("The input is not a single term or symbol")
     if is_derivative(x)
         # In Symbolics v7, Differential stores the order directly
         op = operation(x)

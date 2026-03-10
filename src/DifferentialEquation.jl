@@ -93,9 +93,8 @@ $(TYPEDSIGNATURES)
 
 Return the dependent variables of `diff_eom`.
 """
-Symbolics.get_variables(diff_eom::DifferentialEquation)::Vector{Num} = collect(
-    keys(diff_eom.equations)
-)
+Symbolics.get_variables(diff_eom::DifferentialEquation)::Vector{Num} =
+    collect(keys(diff_eom.equations))
 
 """
 $(TYPEDSIGNATURES)
@@ -104,9 +103,8 @@ Check if all equations in `diff_eom` are harmonic with respect to `t`. The funct
 differential equation system `diff_eom` and a variable `t`, and returns `true` if all equations
 are harmonic with respect to `t`, otherwise it returns `false`.
 """
-QuestBase.is_harmonic(diff_eom::DifferentialEquation, t::Num)::Bool = all([
-    is_harmonic(eq, t) for eq in values(diff_eom.equations)
-])
+QuestBase.is_harmonic(diff_eom::DifferentialEquation, t::Num)::Bool =
+    all([is_harmonic(eq, t) for eq in values(diff_eom.equations)])
 
 """
 $(TYPEDSIGNATURES)
@@ -193,7 +191,7 @@ function rearrange!(eom::DifferentialEquation, new_lhs::Vector{Num})
     return nothing
 end
 function get_variables_nums(vars::Vector{Num})
-    unique(flatten([Num.(get_variables(x)) for x in vars]))
+    return unique(flatten([Num.(get_variables(x)) for x in vars]))
 end # TODO: remove this function or at least better names
 
 """
