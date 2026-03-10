@@ -24,9 +24,9 @@ expand_fraction(x::Num) = Num(expand_fraction(unwrap(x)))
 "Apply a function f on every member of a sum or a product"
 function _apply_termwise(f, x::BasicSymbolic)
     if isadd(x)
-        sum([f(arg) for arg in arguments(x)])
+        sum(f(arg) for arg in arguments(x))
     elseif ismul(x)
-        prod([f(arg) for arg in arguments(x)])
+        prod(f(arg) for arg in arguments(x))
     elseif isdiv(x)
         args = arguments(x)
         _apply_termwise(f, args[1]) / _apply_termwise(f, args[2])
@@ -54,21 +54,16 @@ end
 $(TYPEDSIGNATURES)
 
 Perform substitutions in `rules` on `x`.
-`include_derivatives=true` also includes all derivatives of the variables of the keys of `rules`.
+`include_derivatives=true` also substitutes inside derivative arguments using
+`Symbolics.substitute_in_deriv`.
 """
 Subtype = Union{Num,Equation,BasicSymbolic}
 function substitute_all(x::Subtype, rules::Dict; include_derivatives=true)
+    result = substitute(x, rules)
     if include_derivatives
-        drules = Pair[]
-        for var in keys(rules)
-            if !isa(rules[var], Union{AbstractFloat,Integer})
-                pair = Differential(var) => Differential(rules[var])
-                push!(drules, pair)
-            end
-        end
-        rules = merge(rules, Dict(drules))
+        result = Symbolics.substitute_in_deriv(result, rules)
     end
-    return substitute(x, rules)
+    return result
 end
 
 Collections = Union{Dict,Pair,Vector,OrderedDict}
@@ -87,9 +82,9 @@ get_independent(x, t::Num) = x
 
 function get_independent(x::BasicSymbolic, t::Num)
     if isadd(x)
-        sum([get_independent(arg, t) for arg in arguments(x)])
+        sum(get_independent(arg, t) for arg in arguments(x))
     elseif ismul(x)
-        prod([get_independent(arg, t) for arg in arguments(x)])
+        prod(get_independent(arg, t) for arg in arguments(x))
     elseif isdiv(x)
         args = arguments(x)
         !is_function(args[2], t) ? get_independent(args[1], t) / args[2] : 0
@@ -141,7 +136,7 @@ is_harmonic(x::Equation, t::Num) = is_harmonic(x.lhs, t) && is_harmonic(x.rhs, t
 is_harmonic(x, t) = is_harmonic(Num(x), Num(t))
 
 "Return true if `f` is a function of `var`."
-is_function(f, var) = any(isequal.(get_variables(f), var))
+is_function(f, var) = unwrap(var) in get_variables(f)
 
 """
 Counts the number of derivatives of a symbolic variable.

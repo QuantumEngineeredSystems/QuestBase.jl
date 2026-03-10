@@ -7,9 +7,9 @@ isexp(expr) = isterm(expr) && operation(expr) === exp
 "Expand powers of exponential such that exp(x)^n => exp(x*n) "
 function expand_exp_power(expr::BasicSymbolic)
     if isadd(expr)
-        sum([expand_exp_power(arg) for arg in arguments(expr)])
+        sum(expand_exp_power(arg) for arg in arguments(expr))
     elseif ismul(expr)
-        prod([expand_exp_power(arg) for arg in arguments(expr)])
+        prod(expand_exp_power(arg) for arg in arguments(expr))
     else
         if ispow(expr) && isexp(arguments(expr)[1])
             exp(arguments(arguments(expr)[1])[1] * arguments(expr)[2])

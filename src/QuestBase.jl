@@ -33,7 +33,8 @@ using Symbolics:
     operation,
     expand_derivatives,
     tosymbol,
-    is_derivative
+    is_derivative,
+    sorted_arguments
 
 include("utils.jl")
 include("Symbolics/Symbolics_utils.jl")

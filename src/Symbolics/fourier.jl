@@ -231,12 +231,16 @@ function exp_to_trig(x::BasicSymbolic)
         # put arguments of trigs into a standard form such that sin(x) = -sin(-x), cos(x) = cos(-x) are recognized
         if isadd(trigarg)
             first_symbol = minimum(
-                cat(string.(arguments(trigarg)), string.(arguments(-trigarg)); dims=1)
+                cat(
+                    string.(sorted_arguments(trigarg)),
+                    string.(sorted_arguments(-trigarg));
+                    dims=1,
+                ),
             )
 
             # put trigarg => -trigarg the lowest alphabetic argument of trigarg is lower than that of -trigarg
             # this is a meaningless key but gives unique signs to all sums
-            is_first = minimum(string.(arguments(trigarg))) == first_symbol
+            is_first = minimum(string.(sorted_arguments(trigarg))) == first_symbol
             return if is_first
                 cos(-trigarg) - im * sin(-trigarg)
             else
