@@ -1,5 +1,5 @@
 
-expand_all(x::Num) = Num(expand_all(x.val))
+expand_all(x::Num) = Num(expand_all(unwrap(x)))
 _apply_termwise(f, x::Num) = wrap(_apply_termwise(f, unwrap(x)))
 
 "Expands using SymbolicUtils.expand and expand_exp_power (changes exp(x)^n to exp(x*n)"
@@ -10,33 +10,43 @@ end
 expand_all(x::Complex{Num}) = expand_all(x.re) + im * expand_all(x.im)
 
 function expand_fraction(x::BasicSymbolic)
-    @compactified x::BasicSymbolic begin
-        Add => _apply_termwise(expand_fraction, x)
-        Mul => _apply_termwise(expand_fraction, x)
-        Div => sum([arg / x.den for arg in arguments(x.num)])
-        _   => x
+    if isadd(x) || ismul(x)
+        _apply_termwise(expand_fraction, x)
+    elseif isdiv(x)
+        args = arguments(x)
+        sum([arg / args[2] for arg in arguments(args[1])])
+    else
+        x
     end
 end
-expand_fraction(x::Num) = Num(expand_fraction(x.val))
+expand_fraction(x::Num) = Num(expand_fraction(unwrap(x)))
 
 "Apply a function f on every member of a sum or a product"
 function _apply_termwise(f, x::BasicSymbolic)
-    @compactified x::BasicSymbolic begin
-        Add => sum([f(arg) for arg in arguments(x)])
-        Mul => prod([f(arg) for arg in arguments(x)])
-        Div => _apply_termwise(f, x.num) / _apply_termwise(f, x.den)
-        _   => f(x)
+    if isadd(x)
+        sum([f(arg) for arg in arguments(x)])
+    elseif ismul(x)
+        prod([f(arg) for arg in arguments(x)])
+    elseif isdiv(x)
+        args = arguments(x)
+        _apply_termwise(f, args[1]) / _apply_termwise(f, args[2])
+    else
+        f(x)
     end
 end
 
 simplify_complex(x::Complex) = isequal(x.im, 0) ? x.re : x.re + im * x.im
 simplify_complex(x) = x
 function simplify_complex(x::BasicSymbolic)
-    @compactified x::BasicSymbolic begin
-        Add => _apply_termwise(simplify_complex, x)
-        Mul => _apply_termwise(simplify_complex, x)
-        Div => _apply_termwise(simplify_complex, x)
-        _   => x
+    if isadd(x) || ismul(x) || isdiv(x)
+        _apply_termwise(simplify_complex, x)
+    else
+        # Handle Const-wrapped complex numbers with zero imaginary part
+        v = unwrap_const(x)
+        if v isa Complex && iszero(imag(v))
+            return real(v)
+        end
+        x
     end
 end
 
@@ -68,7 +78,7 @@ function substitute_all(x::Complex{Num}, rules::Collections)
     return substitute_all(x.re, rules) + im * substitute_all(x.im, rules)
 end
 
-get_independent(x::Num, t::Num)::Num = wrap(get_independent(x.val, t))
+get_independent(x::Num, t::Num) = wrap(get_independent(unwrap(x), t))
 function get_independent(x::Complex{Num}, t::Num)
     return get_independent(x.re, t) + im * get_independent(x.im, t)
 end
@@ -76,29 +86,39 @@ get_independent(v::Vector{Num}, t::Num) = [get_independent(el, t) for el in v]
 get_independent(x, t::Num) = x
 
 function get_independent(x::BasicSymbolic, t::Num)
-    @compactified x::BasicSymbolic begin
-        Add  => sum([get_independent(arg, t) for arg in arguments(x)])
-        Mul  => prod([get_independent(arg, t) for arg in arguments(x)])
-        Div  => !is_function(x.den, t) ? get_independent(x.num, t) / x.den : 0
-        Pow  => !is_function(x.base, t) && !is_function(x.exp, t) ? x : 0
-        Term => !is_function(x, t) ? x : 0
-        Sym  => !is_function(x, t) ? x : 0
-        _    => x
+    if isadd(x)
+        sum([get_independent(arg, t) for arg in arguments(x)])
+    elseif ismul(x)
+        prod([get_independent(arg, t) for arg in arguments(x)])
+    elseif isdiv(x)
+        args = arguments(x)
+        !is_function(args[2], t) ? get_independent(args[1], t) / args[2] : 0
+    elseif ispow(x)
+        args = arguments(x)
+        !is_function(args[1], t) && !is_function(args[2], t) ? x : 0
+    elseif isterm(x) || issym(x)
+        !is_function(x, t) ? x : 0
+    else
+        x
     end
 end
 
 "Return all the terms contained in `x`"
-get_all_terms(x::Num) = Num.(unique(_get_all_terms(Symbolics.expand(x).val)))
+get_all_terms(x::Num) = Num.(unique(_get_all_terms(unwrap(Symbolics.expand(x)))))
 get_all_terms(x::BasicSymbolic) = unique(_get_all_terms(Symbolics.expand(x)))
 function get_all_terms(x::Equation)
     return unique(cat(get_all_terms(Num(x.lhs)), get_all_terms(Num(x.rhs)); dims=1))
 end
 function _get_all_terms(x::BasicSymbolic)
-    @compactified x::BasicSymbolic begin
-        Add => vcat([_get_all_terms(term) for term in SymbolicUtils.arguments(x)]...)
-        Mul => SymbolicUtils.arguments(x)
-        Div => [_get_all_terms(x.num)..., _get_all_terms(x.den)...]
-        _   => [x]
+    if isadd(x)
+        vcat([_get_all_terms(arg) for arg in arguments(x)]...)
+    elseif ismul(x)
+        arguments(x)
+    elseif isdiv(x)
+        args = arguments(x)
+        [_get_all_terms(args[1])..., _get_all_terms(args[2])...]
+    else
+        [x]
     end
 end
 _get_all_terms(x) = x
@@ -112,7 +132,7 @@ function is_harmonic(x::Num, t::Num)::Bool
     if !prod(trigs)
         return false
     else
-        powers = [max_power(first(term.val.arguments), t) for term in t_terms[trigs]]
+        powers = [max_power(first(arguments(unwrap(term))), t) for term in t_terms[trigs]]
         return all(isone, powers)
     end
 end
@@ -126,10 +146,15 @@ is_function(f, var) = any(isequal.(get_variables(f), var))
 """
 Counts the number of derivatives of a symbolic variable.
 """
-function count_derivatives(x::Symbolics.BasicSymbolic)
-    (Symbolics.isterm(x) || Symbolics.issym(x)) ||
+function count_derivatives(x::BasicSymbolic)
+    (isterm(x) || issym(x)) ||
         error("The input is not a single term or symbol")
-    bool = Symbolics.is_derivative(x)
-    return bool ? 1 + count_derivatives(first(arguments(x))) : 0
+    if is_derivative(x)
+        # In Symbolics v7, Differential stores the order directly
+        op = operation(x)
+        return op.order
+    else
+        return 0
+    end
 end
-count_derivatives(x::Num) = count_derivatives(Symbolics.unwrap(x))
+count_derivatives(x::Num) = count_derivatives(unwrap(x))

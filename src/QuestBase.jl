@@ -7,18 +7,16 @@ using LinearAlgebra: LinearAlgebra
 using SymbolicUtils:
     SymbolicUtils,
     Postwalk,
-    Sym,
     BasicSymbolic,
     isterm,
     ispow,
     isadd,
     isdiv,
     ismul,
+    issym,
     add_with_div,
-    frac_maketerm,
-    issym
-
-using SymbolicUtils.Unityper: @compactified
+    is_literal_number,
+    unwrap_const
 
 using Symbolics:
     Symbolics,
@@ -33,7 +31,9 @@ using Symbolics:
     term,
     expand,
     operation,
-    expand_derivatives
+    expand_derivatives,
+    tosymbol,
+    is_derivative
 
 include("utils.jl")
 include("Symbolics/Symbolics_utils.jl")

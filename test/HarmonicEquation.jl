@@ -56,7 +56,7 @@ end
     eq_with_params = D(u) ~ p * v + q * v
     heq = HarmonicEquation([eq_with_params, eq2], [hv1, hv2], nat_eq)
     params = _parameters(heq)
-    @eqtest params == parvar
+    @test Set(Symbolics.unwrap.(params)) == Set(Symbolics.unwrap.(parvar))
 end
 
 @testset "Variable handling" begin

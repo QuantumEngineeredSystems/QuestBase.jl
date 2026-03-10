@@ -118,7 +118,7 @@ $(TYPEDSIGNATURES)
 Return the independent dependent variables of `diff_eom`.
 """
 function get_independent_variables(diff_eom::DifferentialEquation)
-    return Num.(flatten(unique([x.val.arguments for x in keys(diff_eom.equations)])))
+    return Num.(flatten(unique([arguments(unwrap(x)) for x in keys(diff_eom.equations)])))
 end
 
 """
@@ -191,7 +191,9 @@ function rearrange!(eom::DifferentialEquation, new_lhs::Vector{Num})
     soln = Symbolics.symbolic_linear_solve(
         get_equations(eom), new_lhs; simplify=false, check=true
     )
-    eom.equations = OrderedDict(zip(get_variables_nums(new_lhs), new_lhs .~ soln))
+    # Use original variable keys (not extracted from new_lhs, as v7's get_variables
+    # treats derivatives as variables)
+    eom.equations = OrderedDict(zip(collect(keys(eom.equations)), new_lhs .~ soln))
     return nothing
 end
 function get_variables_nums(vars::Vector{Num})
