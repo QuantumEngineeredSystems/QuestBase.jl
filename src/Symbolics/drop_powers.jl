@@ -36,7 +36,7 @@ end
 
 # calls the above for various types of the first argument
 function drop_powers(eq::Equation, var::Vector{Num}, deg::Int)
-    return drop_powers(eq.lhs, var, deg) .~ drop_powers(eq.lhs, var, deg)
+    return drop_powers(eq.lhs, var, deg) .~ drop_powers(eq.rhs, var, deg)
 end
 function drop_powers(eqs::Vector{Equation}, var::Vector{Num}, deg::Int)
     return [

@@ -14,7 +14,12 @@ function expand_fraction(x::BasicSymbolic)
         _apply_termwise(expand_fraction, x)
     elseif isdiv(x)
         args = arguments(x)
-        sum(arg / args[2] for arg in arguments(args[1]))
+        num = SymbolicUtils.expand(args[1])
+        if isadd(num)
+            sum(expand_fraction(arg / args[2]) for arg in arguments(num))
+        else
+            x
+        end
     else
         x
     end

@@ -55,7 +55,7 @@ end
     # eq = drop_powers(a^2 + a ~ b, [a, b], 2) # broken
     @eqtest [eq.lhs, eq.rhs] == [a, a]
     eq = drop_powers(a^2 + a + b ~ a, a, 2)
-    @test string(eq.rhs) == "a" broken = true
+    @test string(eq.rhs) == "a"
 
     @eqtest drop_powers([a^2 + a + b, b], a, 2) == [a + b, b]
     @eqtest drop_powers([a^2 + a + b, b], [a, b], 2) == [a + b, b]
@@ -209,8 +209,7 @@ end
     @variables a, b, c, d
 
     @eqtest expand_fraction((a + b) / c) == a / c + b / c
-    @test string.(expand_fraction(d * (a + b) / c)) == "d*a /c + d*b / c + d / c" broken =
-        true
+    @eqtest expand_fraction(d * (a + b) / c) == a * d / c + b * d / c
 end
 @testset "count_derivatives" begin
     using QuestBase: count_derivatives, d
