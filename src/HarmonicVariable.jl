@@ -43,7 +43,7 @@ function _show_ansatz(var::HarmonicVariable)
     if isempty(var.type)
         return string(var.symbol)
     end
-    t = var.natural_variable.val.arguments
+    t = arguments(unwrap(var.natural_variable))
     t = length(t) == 1 ? string(t[1]) : error("more than 1 independent variable")
     ω = string(var.ω)
     terms = Dict("u" => "*cos(" * ω * t * ")", "v" => "*sin(" * ω * t * ")", "a" => "")
@@ -88,7 +88,7 @@ end
 "when HV is used for substitute, substitute its symbol"
 function QuestBase.substitute_all(eq::Union{Num,Equation}, rules::Dict{HarmonicVariable})
     return Symbolics.substitute(
-        eq, Dict(zip(getfield.(keys(rules), :symbol), values(rules)))
+        eq, Dict{Num,Any}(zip([hv.symbol for hv in keys(rules)], values(rules)))
     )
 end
 
