@@ -292,6 +292,7 @@ function _has_negative_coefficient(x::BasicSymbolic)
         end
         _ => false
     end
+    return false
 end
 
 exp_to_trig(x) = x
