@@ -16,10 +16,8 @@ using QuestBase:
     fourier_sin_term,
     drop_powers,
     max_power,
-    power_of,
     substitute_all,
     is_harmonic,
-    is_function,
     count_derivatives,
     add_div,
     DifferentialEquation,
@@ -27,8 +25,7 @@ using QuestBase:
     HarmonicEquation,
     add_harmonic!,
     rearrange_standard!,
-    d,
-    var_name
+    d
 using Symbolics: Symbolics, @variables, unwrap, expand, Num, Equation, Differential
 using SymbolicUtils: BasicSymbolic
 
@@ -63,10 +60,7 @@ SUITE["symbolic_utils"]["_apply_termwise_div"] = @benchmarkable _apply_termwise(
     simplify_complex, $(unwrap((a^2 + b * c + c^3) / (a * b + c^2)))
 )
 
-SUITE["symbolic_utils"]["simplify_complex_add"] = @benchmarkable simplify_complex(
-    $(unwrap(Complex{Num}(a^2 + b * c, 0 * a)))
-)
-SUITE["symbolic_utils"]["simplify_complex_real"] = @benchmarkable simplify_complex(
+SUITE["symbolic_utils"]["simplify_complex"] = @benchmarkable simplify_complex(
     $(Complex{Num}(a^2 + b * c, 0 * a))
 )
 
@@ -79,19 +73,9 @@ SUITE["symbolic_utils"]["get_independent_trig"] = @benchmarkable get_independent
 
 SUITE["symbolic_utils"]["get_all_terms_nested"] = @benchmarkable get_all_terms($expr_nested)
 
-SUITE["symbolic_utils"]["is_function_true"] = @benchmarkable is_function(
-    $(cos(f * t)^2 + a), $t
-)
-SUITE["symbolic_utils"]["is_function_false"] = @benchmarkable is_function(
-    $(a^2 + b * c), $t
-)
-
-SUITE["symbolic_utils"]["count_derivatives_0"] = @benchmarkable count_derivatives($x)
-SUITE["symbolic_utils"]["count_derivatives_2"] = @benchmarkable count_derivatives(
+SUITE["symbolic_utils"]["count_derivatives"] = @benchmarkable count_derivatives(
     $(d(d(x, t), t))
 )
-
-SUITE["symbolic_utils"]["var_name"] = @benchmarkable var_name($x)
 
 # ==========================================================================
 # Exponentials
@@ -120,8 +104,8 @@ trig_expr_hard = (a + b * cos(f * t + θ)^2)^3 * sin(f * t)
 SUITE["fourier"]["trig_to_exp_sq"] = @benchmarkable trig_to_exp($trig_expr_sq)
 SUITE["fourier"]["trig_to_exp_product"] = @benchmarkable trig_to_exp($trig_expr_product)
 
-exp_sum = unwrap(exp(im * a) + exp(-im * a) + exp(im * (a + b)))
-SUITE["fourier"]["exp_to_trig_sum"] = @benchmarkable exp_to_trig($exp_sum)
+exp_sum = trig_to_exp(a * cos(f * t) + b * sin(2f * t))
+SUITE["fourier"]["exp_to_trig"] = @benchmarkable exp_to_trig($exp_sum)
 
 SUITE["fourier"]["add_div"] = @benchmarkable add_div($(a / (b + c) + b / (a + c)))
 
@@ -151,7 +135,6 @@ SUITE["powers"] = BenchmarkGroup()
 
 SUITE["powers"]["max_power_simple"] = @benchmarkable max_power($(a^2 + b), $a)
 SUITE["powers"]["max_power_nested"] = @benchmarkable max_power($(a * ((a + b)^4)^2 + a), $a)
-SUITE["powers"]["power_of_pow"] = @benchmarkable power_of($(unwrap(a^3)), $(unwrap(a)))
 SUITE["powers"]["drop_powers_single_var"] = @benchmarkable drop_powers(
     $((a + b)^3 + a^2 * b + a * b^2), $a, 2
 )

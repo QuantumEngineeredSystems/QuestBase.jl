@@ -65,13 +65,14 @@ function power_of(x::Num, y::Num)
 end
 
 function power_of(x::BasicSymbolic, y::BasicSymbolic)
-    if ispow(x) && issym(y)
-        args = arguments(x)
-        return isequal(args[1], y) ? unwrap_const(args[2]) : 0
-    elseif issym(x) && issym(y)
-        return isequal(x, y) ? 1 : 0
-    else
-        return 0
+    @match x begin
+        BSImpl.Term(; f, args) => if f === (^) && issym(y)
+            isequal(args[1], y) ? unwrap_const(args[2]) : 0
+        else
+            0
+        end
+        BSImpl.Sym() => issym(y) && isequal(x, y) ? 1 : 0
+        _ => 0
     end
 end
 

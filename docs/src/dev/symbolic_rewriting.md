@@ -101,6 +101,46 @@ QuestBase's small, targeted transformations.
 `Postwalk` is still used where it works well: `expand_all` and `add_div`, where the
 rewriter needs to visit all nodes anyway.
 
+## Moshi `@match` vs Predicate Chains
+
+SymbolicUtils v4 replaced Unityper's `@compactify` with Moshi's `@data` for `BasicSymbolicImpl`.
+SymbolicUtils itself uses `@match` (from `Moshi.Match`) internally and comments
+"use `@match` instead of `x.type` since it is faster" (types.jl:287).
+
+We benchmarked all QuestBase functions that use `isadd`/`ismul`/`isdiv`/`ispow` predicate
+chains against `@match`-based alternatives (see `benchmark/match_vs_predicates.jl`):
+
+| Function | Predicates (ns) | @match (ns) | Ratio | Winner |
+|---|---|---|---|---|
+| `_apply_termwise` (add) | 21980 | 21920 | 1.0x | ~same |
+| `_apply_termwise` (mul) | 14140 | 13926 | 1.02x | ~same |
+| `_apply_termwise` (div) | 18680 | 18240 | 1.02x | ~same |
+| `expand_exp_power` | 15470 | 15380 | 1.01x | ~same |
+| `simplify_exp_products` | 10881 | 10830 | 1.0x | ~same |
+| `get_independent` (simple) | 11810 | 11860 | 1.0x | ~same |
+| `get_independent` (trig) | 4090 | 4099 | 1.0x | ~same |
+| `_get_all_terms` | 2355 | 2287 | 1.0x | ~same |
+| `expand_fraction` | 114731 | 115330 | 0.99x | ~same |
+| `simplify_complex` | 21860 | 21930 | 1.0x | ~same |
+| `exp_to_trig` | 4.8 | 4.8 | 1.0x | ~same |
+| `power_of` | 21.3 | 15.3 | 1.39x | @match |
+| `is_trig` | 106.6 | 98.2 | 1.09x | @match |
+
+**Conclusion:** The variant tag check is negligible compared to the actual symbolic
+computation (building sums/products, calling `arguments()`, etc.). The only functions
+where `@match` is measurably faster are trivially fast leaf checks (`power_of` at 21 ns,
+`is_trig` at 107 ns) where the tag overhead is a larger fraction of total runtime.
+
+Note: SymbolicUtils' "use `@match`" comment applies to simple field-extraction functions
+like `symtype` where the *only* work is reading a field. In QuestBase's functions, the
+branch cost is dwarfed by the recursive symbolic computation.
+
+**Decision:** Use `@match` everywhere for consistency with SymbolicUtils v4's own style.
+While performance is equivalent, `@match` provides cleaner pattern-based dispatch and
+avoids redundant variant tag checks. All predicate chains in QuestBase have been converted
+to `@match` (from `Moshi.Match`). Note: JET reports false positives for Moshi-generated
+internal variables (`##Call#`, `##And#`) which are filtered in `test/code_quality.jl`.
+
 ## Function-by-Function Analysis
 
 Every function in `src/Symbolics/` was analyzed for rule-based rewriting potential.

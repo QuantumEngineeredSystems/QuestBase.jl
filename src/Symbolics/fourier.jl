@@ -36,9 +36,14 @@ end
 is_trig(f::Num) = is_trig(unwrap(f))
 is_trig(f) = false
 function is_trig(f::BasicSymbolic)
-    f = ispow(f) ? arguments(f)[1] : f
-    isterm(f) && operation(f) ∈ [cos, sin] && return true
-    return false
+    @match f begin
+        BSImpl.Term(; f=op, args) => if op === (^)
+            isterm(args[1]) && operation(args[1]) ∈ [cos, sin]
+        else
+            op ∈ [cos, sin]
+        end
+        _ => false
+    end
 end
 
 """
@@ -214,28 +219,31 @@ function _exp_to_trig_node(x::BasicSymbolic)
     end
 
     # put arguments of trigs into a standard form such that sin(x) = -sin(-x), cos(x) = cos(-x) are recognized
-    if isadd(trigarg)
-        first_symbol = minimum(
-            cat(
-                string.(sorted_arguments(trigarg)),
-                string.(sorted_arguments(-trigarg));
-                dims=1,
-            ),
-        )
-
-        # put trigarg => -trigarg the lowest alphabetic argument of trigarg is lower than that of -trigarg
-        # this is a meaningless key but gives unique signs to all sums
-        is_first = minimum(string.(sorted_arguments(trigarg))) == first_symbol
-        return if is_first
-            cos(-trigarg) - im * sin(-trigarg)
-        else
-            cos(trigarg) + im * sin(trigarg)
+    @match trigarg begin
+        BSImpl.AddMul(; variant) => if variant == AddMulVariant.ADD
+            first_symbol = minimum(
+                cat(
+                    string.(sorted_arguments(trigarg)),
+                    string.(sorted_arguments(-trigarg));
+                    dims=1,
+                ),
+            )
+            # put trigarg => -trigarg the lowest alphabetic argument of trigarg is lower than that of -trigarg
+            # this is a meaningless key but gives unique signs to all sums
+            is_first = minimum(string.(sorted_arguments(trigarg))) == first_symbol
+            return if is_first
+                cos(-trigarg) - im * sin(-trigarg)
+            else
+                cos(trigarg) + im * sin(trigarg)
+            end
+        else  # MUL
+            return if _has_negative_coefficient(trigarg)
+                cos(-trigarg) - im * sin(-trigarg)
+            else
+                cos(trigarg) + im * sin(trigarg)
+            end
         end
-    end
-    return if ismul(trigarg) && _has_negative_coefficient(trigarg)
-        cos(-trigarg) - im * sin(-trigarg)
-    else
-        cos(trigarg) + im * sin(trigarg)
+        _ => return cos(trigarg) + im * sin(trigarg)
     end
 end
 
@@ -256,25 +264,33 @@ complex numbers, and `Num` types. Standardizes the sign of
 trigonometric arguments for consistent simplification.
 """
 function exp_to_trig(x::BasicSymbolic)
-    if isadd(x) || isdiv(x) || ismul(x)
-        return _apply_termwise(exp_to_trig, x)
+    @match x begin
+        BSImpl.AddMul() => _apply_termwise(exp_to_trig, x)
+        BSImpl.Div() => _apply_termwise(exp_to_trig, x)
+        _ => begin
+            result = _exp_to_trig_node(x)
+            isnothing(result) ? x : result
+        end
     end
-    result = _exp_to_trig_node(x)
-    return isnothing(result) ? x : result
 end
 
 "Check if a Mul expression has a negative leading coefficient"
 function _has_negative_coefficient(x::BasicSymbolic)
-    if !ismul(x)
-        return false
-    end
-    # Check the arguments for a negative numeric factor
-    # Use unwrap_const to handle Const-wrapped numbers in SymbolicUtils v4
-    for arg in arguments(x)
-        v = arg isa BasicSymbolic ? unwrap_const(arg) : arg
-        if v isa Number && v < 0
-            return true
+    @match x begin
+        BSImpl.AddMul(; variant) => if variant == AddMulVariant.MUL
+            # Check the arguments for a negative numeric factor
+            # Use unwrap_const to handle Const-wrapped numbers in SymbolicUtils v4
+            for arg in arguments(x)
+                v = arg isa BasicSymbolic ? unwrap_const(arg) : arg
+                if v isa Real && v < 0
+                    return true
+                end
+            end
+            false
+        else
+            false
         end
+        _ => false
     end
     return false
 end

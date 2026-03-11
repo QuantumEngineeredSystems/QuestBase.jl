@@ -1,16 +1,24 @@
 "Returns true if expr is an exponential"
-isexp(expr) = isterm(expr) && operation(expr) === exp
+isexp(expr::BasicSymbolic) = @match expr begin
+    BSImpl.Term(; f) => f === exp
+    _ => false
+end
+isexp(expr) = false
 
 "Expand powers of exponential such that exp(x)^n => exp(x*n)"
 function expand_exp_power(expr::BasicSymbolic)
-    if isadd(expr)
-        sum(expand_exp_power(arg) for arg in arguments(expr))
-    elseif ismul(expr)
-        prod(expand_exp_power(arg) for arg in arguments(expr))
-    elseif ispow(expr) && isexp(arguments(expr)[1])
-        exp(arguments(arguments(expr)[1])[1] * arguments(expr)[2])
-    else
-        expr
+    @match expr begin
+        BSImpl.AddMul(; variant) => if variant == AddMulVariant.ADD
+            sum(expand_exp_power(arg) for arg in arguments(expr))
+        else  # MUL
+            prod(expand_exp_power(arg) for arg in arguments(expr))
+        end
+        BSImpl.Term(; f, args) => if f === (^) && isexp(args[1])
+            exp(arguments(args[1])[1] * args[2])
+        else
+            expr
+        end
+        _ => expr
     end
 end
 expand_exp_power(expr::Num) = expand_exp_power(unwrap(expr))
@@ -19,17 +27,20 @@ expand_exp_power(expr) = expr
 "Simplify products of exponentials such that exp(a)*exp(b) => exp(a+b).
 Also expands exp(x)^n => exp(x*n) and simplifies exp(0) => 1."
 function simplify_exp_products(expr::BasicSymbolic)
-    if isadd(expr)
-        _apply_termwise(simplify_exp_products, expr)
-    elseif isdiv(expr)
-        _apply_termwise(simplify_exp_products, expr)
-    elseif ismul(expr)
-        _simplify_exp_products_mul(expr)
-    elseif ispow(expr) && isexp(arguments(expr)[1])
-        # exp(x)^n => exp(x*n) — fixes bug where exp powers were left unexpanded
-        exp(arguments(arguments(expr)[1])[1] * arguments(expr)[2])
-    else
-        expr
+    @match expr begin
+        BSImpl.AddMul(; variant) => if variant == AddMulVariant.ADD
+            _apply_termwise(simplify_exp_products, expr)
+        else  # MUL
+            _simplify_exp_products_mul(expr)
+        end
+        BSImpl.Div() => _apply_termwise(simplify_exp_products, expr)
+        BSImpl.Term(; f, args) => if f === (^) && isexp(args[1])
+            # exp(x)^n => exp(x*n)
+            exp(arguments(args[1])[1] * args[2])
+        else
+            expr
+        end
+        _ => expr
     end
 end
 
