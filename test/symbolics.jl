@@ -59,6 +59,20 @@ end
 
     @eqtest drop_powers([a^2 + a + b, b], a, 2) == [a + b, b]
     @eqtest drop_powers([a^2 + a + b, b], [a, b], 2) == [a + b, b]
+
+    @testset "BasicSymbolic" begin
+        using SymbolicUtils: @syms
+
+        @syms a_bs b_bs
+
+        @test max_power(a_bs^2 + b_bs, a_bs) == 2
+        @test max_power(a_bs * ((a_bs + b_bs)^4)^2 + a_bs, a_bs) == 9
+
+        @test isequal(drop_powers(a_bs^2 + b_bs, a_bs, 2), b_bs)
+        @test isequal(drop_powers((a_bs + b_bs)^2, a_bs, 1), b_bs^2)
+        @test isequal(drop_powers((a_bs + b_bs)^2, [a_bs, b_bs], 2), unwrap(Num(0)))
+        @test drop_powers(a_bs^2 + b_bs, a_bs, 2) isa BasicSymbolic
+    end
 end
 
 @testset "trig_to_exp and exp_to_trig" begin

@@ -13,6 +13,11 @@ julia>drop_powers((x+y)^2 + (x+y)^3, [x,y], 3)
 x^2 + y^2 + 2*x*y
 ```
 """
+function drop_powers(expr::BasicSymbolic, vars::Vector{<:BasicSymbolic}, deg::Int)
+    return unwrap(drop_powers(Num(expr), Num.(vars), deg))
+end
+
+# Num fallback: the actual implementation
 function drop_powers(expr::Num, vars::Vector{Num}, deg::Int)
     Symbolics.@variables ϵ
     subs_expr = deepcopy(expr)
@@ -43,17 +48,19 @@ function drop_powers(eqs::Vector{Equation}, var::Vector{Num}, deg::Int)
         Equation(drop_powers(eq.lhs, var, deg), drop_powers(eq.rhs, var, deg)) for eq in eqs
     ]
 end
+drop_powers(expr::BasicSymbolic, var::BasicSymbolic, deg::Int) = drop_powers(expr, [var], deg)
 drop_powers(expr, var::Num, deg::Int) = drop_powers(expr, [var], deg)
-drop_powers(x, vars, deg::Int) = drop_powers(wrap(x), vars, deg)
-# ^ TODO: in principle `drop_powers` should get in BasicSymbolic and have a fallback for Num
+drop_powers(x, vars, deg::Int) = drop_powers(Num(x), Num.(vars), deg)
 
 "Return the highest power of `y` occurring in the term `x`."
-function max_power(x::Num, y::Num)
+function max_power(x::BasicSymbolic, y::BasicSymbolic)
     terms = get_all_terms(x)
     powers = power_of.(terms, y)
     return maximum(powers)
 end
 
+# Num fallback: unwrap to BasicSymbolic
+max_power(x::Num, y::Num) = max_power(unwrap(x), unwrap(y))
 max_power(x::Vector{Num}, y::Num) = maximum(max_power.(x, y))
 max_power(x::Complex, y::Num) = maximum(max_power.([x.re, x.im], y))
 max_power(x, t) = max_power(wrap(x), wrap(t))
