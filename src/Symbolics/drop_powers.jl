@@ -48,7 +48,9 @@ function drop_powers(eqs::Vector{Equation}, var::Vector{Num}, deg::Int)
         Equation(drop_powers(eq.lhs, var, deg), drop_powers(eq.rhs, var, deg)) for eq in eqs
     ]
 end
-drop_powers(expr::BasicSymbolic, var::BasicSymbolic, deg::Int) = drop_powers(expr, [var], deg)
+function drop_powers(expr::BasicSymbolic, var::BasicSymbolic, deg::Int)
+    drop_powers(expr, [var], deg)
+end
 drop_powers(expr, var::Num, deg::Int) = drop_powers(expr, [var], deg)
 drop_powers(x, vars, deg::Int) = drop_powers(Num(x), Num.(vars), deg)
 
@@ -61,6 +63,7 @@ end
 
 # Num fallback: unwrap to BasicSymbolic
 max_power(x::Num, y::Num) = max_power(unwrap(x), unwrap(y))
+max_power(x::BasicSymbolic, y::Num) = max_power(x, unwrap(y))
 max_power(x::Vector{Num}, y::Num) = maximum(max_power.(x, y))
 max_power(x::Complex, y::Num) = maximum(max_power.([x.re, x.im], y))
 max_power(x, t) = max_power(wrap(x), wrap(t))

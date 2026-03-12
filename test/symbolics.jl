@@ -1,6 +1,6 @@
 using Test
 using Symbolics
-using SymbolicUtils: Fixpoint, Prewalk, PassThrough, BasicSymbolic
+using SymbolicUtils: Fixpoint, Prewalk, PassThrough, BasicSymbolic, unwrap
 
 using QuestBase: @eqtest
 
