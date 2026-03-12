@@ -66,6 +66,7 @@ max_power(x::Num, y::Num) = max_power(unwrap(x), unwrap(y))
 max_power(x::BasicSymbolic, y::Num) = max_power(x, unwrap(y))
 max_power(x::Vector{Num}, y::Num) = maximum(max_power.(x, y))
 max_power(x::Complex, y::Num) = maximum(max_power.([x.re, x.im], y))
+max_power(x::Num, y::BasicSymbolic) = max_power(unwrap(x), y)
 max_power(x, t) = max_power(wrap(x), wrap(t))
 
 "Return the power of `y` in the term `x`"
