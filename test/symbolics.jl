@@ -72,6 +72,22 @@ end
         @test isequal(drop_powers((a_bs + b_bs)^2, a_bs, 1), b_bs^2)
         @test isequal(drop_powers((a_bs + b_bs)^2, [a_bs, b_bs], 2), unwrap(Num(0)))
         @test drop_powers(a_bs^2 + b_bs, a_bs, 2) isa BasicSymbolic
+
+        # Mixed-type regression tests: Num expression with BasicSymbolic variables
+        @test max_power(Num(a_bs^2 + b_bs), a_bs) == 2
+        @test max_power(Num(a_bs * ((a_bs + b_bs)^4)^2 + a_bs), a_bs) == 9
+
+        let expr = Num(a_bs^2 + b_bs)
+            res = drop_powers(expr, a_bs, 2)
+            @test res isa Num
+            @test isequal(unwrap(res), b_bs)
+        end
+
+        let expr = Num((a_bs + b_bs)^2)
+            res = drop_powers(expr, [a_bs, b_bs], 2)
+            @test res isa Num
+            @test isequal(unwrap(res), unwrap(Num(0)))
+        end
     end
 end
 
