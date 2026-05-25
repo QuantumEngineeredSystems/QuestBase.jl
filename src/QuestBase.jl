@@ -27,7 +27,6 @@ using Symbolics:
     Equation,
     Differential,
     arguments,
-    substitute,
     term,
     expand,
     operation,

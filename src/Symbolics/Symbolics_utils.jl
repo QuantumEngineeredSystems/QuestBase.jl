@@ -63,8 +63,26 @@ Perform substitutions in `rules` on `x`.
 `Symbolics.substitute_in_deriv`.
 """
 Subtype = Union{Num,Equation,BasicSymbolic}
+
+# SymbolicUtils 4 / Symbolics 7: substitute() does not recurse into call arguments
+# (e.g. it leaves x(t) unchanged when substituting t => T). Walk the expression and
+# rewrite matching nodes ourselves.
+function _deep_substitute(e::BasicSymbolic, unwrap_rules::Dict)
+    # SU 4's default filter blocks recursion into the arguments of callable-symbolic
+    # terms (e.g. `x(t)`). Override with an always-true filter so substitutions like
+    # `t => T` reach inside `x(t)`. Compound keys still match before recursion, and
+    # SU does not re-walk the replacement, so self-referential rules don't loop.
+    return SymbolicUtils.substitute(e, unwrap_rules; filterer = _ -> true)
+end
+_deep_substitute(x::Num, ur::Dict) = wrap(_deep_substitute(unwrap(x), ur))
+function _deep_substitute(eq::Equation, ur::Dict)
+    return Equation(_deep_substitute(unwrap(eq.lhs), ur), _deep_substitute(unwrap(eq.rhs), ur))
+end
+_deep_substitute(x, ::Dict) = x
+
 function substitute_all(x::Subtype, rules::Dict; include_derivatives=true)
-    result = substitute(x, rules)
+    unwrap_rules = Dict(unwrap(k) => unwrap(v) for (k, v) in rules)
+    result = _deep_substitute(x, unwrap_rules)
     if include_derivatives
         result = Symbolics.substitute_in_deriv(result, rules)
     end

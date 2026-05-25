@@ -37,8 +37,9 @@ is_trig(f::Num) = is_trig(unwrap(f))
 is_trig(f) = false
 function is_trig(f::BasicSymbolic)
     f = ispow(f) ? arguments(f)[1] : f
-    isterm(f) && operation(f) ∈ [cos, sin] && return true
-    return false
+    isterm(f) || return false
+    op = operation(f)
+    return op === cos || op === sin
 end
 
 """
