@@ -29,7 +29,37 @@ function trig_reduce(x)
     x = simplify_exp_products(x) # simplify products of exps
     x = exp_to_trig(x)
     x = Num(simplify_complex(expand(x)))
-    return x # simplify_fractions(x)# (a*c^2 + b*c)/c^2 = (a*c + b)/c
+    return reduce_denominator(x) # collapse trig identities left in the denominator
+end
+
+"""
+    reduce_denominator(x)
+
+Reduce trigonometric identities left in the denominator of a fraction.
+
+Fraction denominators arise from combining fractions (`add_div` merges `a/b + c/d`
+into a single fraction) and from solving linear systems (`rearrange!` divides by the
+coefficient determinant). The exponential round-trip in [`trig_reduce`](@ref) only
+reaches the numerator, so identities such as the Pythagorean
+`cos(ωt)² + sin(ωt)² => 1` survive in the denominator. Reduce the denominator on
+its own (it holds no nested fraction, so the recursion terminates) and leave the
+numerator untouched. Trig-free denominators are returned unchanged.
+"""
+function reduce_denominator(x)
+    u = unwrap(x)
+    isdiv(u) || return x
+    num, den = arguments(u)
+    contains_trig(den) || return x
+    return wrap(num) / trig_reduce(wrap(den))
+end
+
+"Return true if any subterm of `x` is a sin or cos."
+contains_trig(x::Num) = contains_trig(unwrap(x))
+contains_trig(x) = false
+function contains_trig(x::BasicSymbolic)
+    is_trig(x) && return true
+    SymbolicUtils.iscall(x) || return false
+    return any(contains_trig, arguments(x))
 end
 
 "Return true if `f` is a sin or cos."
@@ -37,8 +67,9 @@ is_trig(f::Num) = is_trig(unwrap(f))
 is_trig(f) = false
 function is_trig(f::BasicSymbolic)
     f = ispow(f) ? arguments(f)[1] : f
-    isterm(f) && operation(f) ∈ [cos, sin] && return true
-    return false
+    isterm(f) || return false
+    op = operation(f)
+    return op === cos || op === sin
 end
 
 """
