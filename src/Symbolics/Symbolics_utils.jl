@@ -72,11 +72,13 @@ function _deep_substitute(e::BasicSymbolic, unwrap_rules::Dict)
     # terms (e.g. `x(t)`). Override with an always-true filter so substitutions like
     # `t => T` reach inside `x(t)`. Compound keys still match before recursion, and
     # SU does not re-walk the replacement, so self-referential rules don't loop.
-    return SymbolicUtils.substitute(e, unwrap_rules; filterer = _ -> true)
+    return SymbolicUtils.substitute(e, unwrap_rules; filterer=_ -> true)
 end
 _deep_substitute(x::Num, ur::Dict) = wrap(_deep_substitute(unwrap(x), ur))
 function _deep_substitute(eq::Equation, ur::Dict)
-    return Equation(_deep_substitute(unwrap(eq.lhs), ur), _deep_substitute(unwrap(eq.rhs), ur))
+    return Equation(
+        _deep_substitute(unwrap(eq.lhs), ur), _deep_substitute(unwrap(eq.rhs), ur)
+    )
 end
 _deep_substitute(x, ::Dict) = x
 
