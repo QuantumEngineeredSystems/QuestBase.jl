@@ -167,6 +167,34 @@ end
     # slow-flow equations to `0 ~ d/dT`.
     @eqtest trig_reduce(a / (cos(f * t)^2 + sin(f * t)^2)) == a
     @eqtest trig_reduce(a / (ω * cos(f * t)^2 + ω * sin(f * t)^2)) == a / ω
+
+    # trig-free denominators pass through `reduce_denominator` untouched
+    using QuestBase: reduce_denominator
+    @eqtest reduce_denominator(a / (ω^2 + 1)) == a / (ω^2 + 1)
+end
+
+@testset "rearrange! reduces determinant denominators" begin
+    # `symbolic_linear_solve` returns nested fractions whose denominators hold the
+    # coefficient determinant; for a trigonometric ansatz it contains cos² + sin² = 1.
+    # `rearrange!` must flatten and collapse it, otherwise every consumer works with
+    # superficially time-dependent denominators (this stalled the Krylov-Bogoliubov
+    # order-2 averaging for hours).
+    using QuestBase: HarmonicEquation, HarmonicVariable, DifferentialEquation
+    using QuestBase: rearrange!, d
+    @variables ω t T u1(T) v1(T) x(t)
+
+    eqs = [
+        cos(ω * t) * d(u1, T) + sin(ω * t) * d(v1, T) ~ u1,
+        -sin(ω * t) * d(u1, T) + cos(ω * t) * d(v1, T) ~ v1,
+    ]
+    hvars = [HarmonicVariable(u1, "u", "u", ω, x), HarmonicVariable(v1, "v", "v", ω, x)]
+    natural_eq = DifferentialEquation(d(x, t, 2) + x ~ 0, x)
+    eom = HarmonicEquation(eqs, hvars, natural_eq)
+
+    rearrange!(eom, d([u1, v1], T))
+    lhs = QuestBase.Num.(getfield.(eom.equations, :lhs))
+    @eqtest lhs[1] == u1 * cos(ω * t) - v1 * sin(ω * t)
+    @eqtest lhs[2] == u1 * sin(ω * t) + v1 * cos(ω * t)
 end
 
 @testset "_apply_termwise" begin

@@ -35,19 +35,31 @@ end
 """
     reduce_denominator(x)
 
-Reduce trigonometric identities left in the denominator of a combined fraction.
+Reduce trigonometric identities left in the denominator of a fraction.
 
-`add_div` merges `a/b + c/d` into a single fraction, but the exponential round-trip
-in [`trig_reduce`](@ref) only reaches the numerator, so identities such as the
-Pythagorean `cos(ωt)² + sin(ωt)² => 1` survive in the denominator. Reduce the
-denominator on its own (it holds no nested fraction, so the recursion terminates)
-and leave the numerator untouched.
+Fraction denominators arise from combining fractions (`add_div` merges `a/b + c/d`
+into a single fraction) and from solving linear systems (`rearrange!` divides by the
+coefficient determinant). The exponential round-trip in [`trig_reduce`](@ref) only
+reaches the numerator, so identities such as the Pythagorean
+`cos(ωt)² + sin(ωt)² => 1` survive in the denominator. Reduce the denominator on
+its own (it holds no nested fraction, so the recursion terminates) and leave the
+numerator untouched. Trig-free denominators are returned unchanged.
 """
 function reduce_denominator(x)
     u = unwrap(x)
     isdiv(u) || return x
     num, den = arguments(u)
+    contains_trig(den) || return x
     return wrap(num) / trig_reduce(wrap(den))
+end
+
+"Return true if any subterm of `x` is a sin or cos."
+contains_trig(x::Num) = contains_trig(unwrap(x))
+contains_trig(x) = false
+function contains_trig(x::BasicSymbolic)
+    is_trig(x) && return true
+    SymbolicUtils.iscall(x) || return false
+    return any(contains_trig, arguments(x))
 end
 
 "Return true if `f` is a sin or cos."
