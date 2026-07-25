@@ -173,12 +173,52 @@ end
     @eqtest reduce_denominator(a / (ω^2 + 1)) == a / (ω^2 + 1)
 end
 
+@testset "fraction-free linear solve" begin
+    using LinearAlgebra
+    using QuestBase: fraction_free_linear_solve
+
+    @variables a b c x y z
+    equations = [2x + y - z ~ a, x + 3y + z ~ b, 2x - y + 4z ~ c]
+    solution = fraction_free_linear_solve(equations, [x, y, z])
+    @eqtest solution[1] == (13a - 3b + 4c) / 31
+    @eqtest solution[2] == (-2a + 10b - 3c) / 31
+    @eqtest solution[3] == (-7a + 4b + 5c) / 31
+
+    # A zero diagonal requires a row pivot.
+    pivoted = fraction_free_linear_solve([y ~ a, x + y ~ b], [x, y])
+    @eqtest pivoted[1] == b - a
+    @eqtest pivoted[2] == a
+
+    @test_throws LinearAlgebra.SingularException fraction_free_linear_solve(
+        [x + y ~ a, 2x + 2y ~ b], [x, y]
+    )
+
+    # Compare arbitrary nonsingular integer systems against exact rational arithmetic.
+    rng = Random.MersenneTwister(0x5eed)
+    for dimension in 2:5
+        matrix = rand(rng, -4:4, dimension, dimension)
+        while iszero(det(matrix))
+            matrix = rand(rng, -4:4, dimension, dimension)
+        end
+        rhs = rand(rng, -4:4, dimension)
+        symbolic_variables = only(@variables q[1:dimension])
+        random_equations = [
+            sum(
+                matrix[row, column] * symbolic_variables[column] for column in 1:dimension
+            ) ~ rhs[row] for row in 1:dimension
+        ]
+        actual = fraction_free_linear_solve(random_equations, symbolic_variables)
+        expected = Rational{Int}.(matrix) \ Rational{Int}.(rhs)
+        for index in eachindex(actual)
+            @eqtest actual[index] == expected[index]
+        end
+    end
+end
+
 @testset "rearrange! reduces determinant denominators" begin
-    # `symbolic_linear_solve` returns nested fractions whose denominators hold the
-    # coefficient determinant; for a trigonometric ansatz it contains cos² + sin² = 1.
-    # `rearrange!` must flatten and collapse it, otherwise every consumer works with
-    # superficially time-dependent denominators (this stalled the Krylov-Bogoliubov
-    # order-2 averaging for hours).
+    # Fraction-free elimination produces one determinant denominator instead of nested
+    # LU fractions. For a trigonometric ansatz that determinant contains
+    # cos² + sin² = 1, which `rearrange!` must collapse before downstream averaging.
     using QuestBase: HarmonicEquation, HarmonicVariable, DifferentialEquation
     using QuestBase: rearrange!, d
     @variables ω t T u1(T) v1(T) x(t)

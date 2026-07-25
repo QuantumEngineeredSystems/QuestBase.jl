@@ -182,9 +182,16 @@ the left-hand sides. Uses symbolic linear solving to determine the right-hand si
 the equations in place.
 """
 function rearrange!(eom::DifferentialEquation, new_lhs::Vector{Num})
-    soln = Symbolics.symbolic_linear_solve(
-        get_equations(eom), new_lhs; simplify=false, check=true
-    )
+    soln = try
+        fraction_free_linear_solve(get_equations(eom), new_lhs)
+    catch error
+        error isa BareissFailure || rethrow()
+        Num.(
+            Symbolics.symbolic_linear_solve(
+                get_equations(eom), new_lhs; simplify=false, check=true
+            ),
+        )
+    end
     # Use original variable keys (not extracted from new_lhs, as v7's get_variables
     # treats derivatives as variables)
     eom.equations = OrderedDict(zip(collect(keys(eom.equations)), new_lhs .~ soln))

@@ -171,15 +171,16 @@ end
 
 "Rearrange an equation system such that the field equations is equal to the vector specified in new_lhs"
 function rearrange!(eom::HarmonicEquation, new_rhs::Vector{Num})
-    soln = Symbolics.symbolic_linear_solve(
-        eom.equations, new_rhs; simplify=false, check=true
-    )
-    # `symbolic_linear_solve` returns nested fractions whose denominators hold the
-    # coefficient determinant; for a trigonometric ansatz it contains identities like
-    # cos(ωt)² + sin(ωt)² = 1 that SymbolicUtils 4's `simplify` no longer collapses.
-    # Flatten the nest (polynomial-level, no AC matching) and reduce the denominator,
-    # so no consumer works with superficially time-dependent denominators.
-    soln = reduce_denominator.(Symbolics.simplify_fractions.(Num.(soln)))
+    soln = try
+        fraction_free_linear_solve(eom.equations, new_rhs)
+    catch error
+        error isa BareissFailure || rethrow()
+        fallback = Symbolics.symbolic_linear_solve(
+            eom.equations, new_rhs; simplify=false, check=true
+        )
+        Symbolics.simplify_fractions.(Num.(fallback))
+    end
+    soln = reduce_denominator.(soln)
     eom.equations = soln .~ new_rhs
     return nothing
 end

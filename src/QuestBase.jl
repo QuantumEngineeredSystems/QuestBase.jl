@@ -1,6 +1,8 @@
 module QuestBase
 
 using DocStringExtensions
+import DynamicPolynomials as DP
+import MultivariatePolynomials as MP
 using OrderedCollections: OrderedCollections, OrderedDict, OrderedSet
 using LinearAlgebra: LinearAlgebra
 
@@ -40,6 +42,7 @@ include("Symbolics/Symbolics_utils.jl")
 include("Symbolics/exponentials.jl")
 include("Symbolics/fourier.jl")
 include("Symbolics/drop_powers.jl")
+include("Symbolics/linear_solve.jl")
 include("DifferentialEquation.jl")
 include("Variables.jl")
 include("HarmonicVariable.jl")
