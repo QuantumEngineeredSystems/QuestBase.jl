@@ -54,8 +54,9 @@ function _bareiss_jordan_solve(coefficients, right_hand_side)
         isnothing(pivot_row) && throw(LinearAlgebra.SingularException(pivot_index))
         if pivot_row != pivot_index
             for column in axes(augmented, 2)
-                augmented[pivot_index, column], augmented[pivot_row, column] =
-                    augmented[pivot_row, column], augmented[pivot_index, column]
+                swapped = augmented[pivot_index, column]
+                augmented[pivot_index, column] = augmented[pivot_row, column]
+                augmented[pivot_row, column] = swapped
             end
         end
 
@@ -99,9 +100,9 @@ function _bareiss_jordan_solve(coefficients, right_hand_side)
     return solution
 end
 
-_to_polynomial(expression::Num, symbolic_to_poly, poly_to_symbolic) = _to_polynomial(
-    unwrap(expression), symbolic_to_poly, poly_to_symbolic
-)
+function _to_polynomial(expression::Num, symbolic_to_poly, poly_to_symbolic)
+    return _to_polynomial(unwrap(expression), symbolic_to_poly, poly_to_symbolic)
+end
 _to_polynomial(expression::Number, _, _) = expression
 function _to_polynomial(expression::BasicSymbolic, symbolic_to_poly, poly_to_symbolic)
     if SymbolicUtils.isconst(expression)
@@ -130,7 +131,7 @@ function _to_polynomial(expression::BasicSymbolic, symbolic_to_poly, poly_to_sym
 
     variable = get!(symbolic_to_poly, expression) do
         name = Symbol(:questbase_atom_, hash(expression))
-        MP.similar_variable(_BAREISS_VARIABLE, name)
+        return MP.similar_variable(_BAREISS_VARIABLE, name)
     end
     get!(poly_to_symbolic, variable, expression)
     return variable

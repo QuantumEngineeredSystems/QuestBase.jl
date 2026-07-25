@@ -203,8 +203,9 @@ end
         rhs = rand(rng, -4:4, dimension)
         symbolic_variables = only(@variables q[1:dimension])
         random_equations = [
-            sum(matrix[row, column] * symbolic_variables[column] for column in 1:dimension) ~
-            rhs[row] for row in 1:dimension
+            sum(
+                matrix[row, column] * symbolic_variables[column] for column in 1:dimension
+            ) ~ rhs[row] for row in 1:dimension
         ]
         actual = fraction_free_linear_solve(random_equations, symbolic_variables)
         expected = Rational{Int}.(matrix) \ Rational{Int}.(rhs)
