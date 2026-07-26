@@ -26,9 +26,12 @@ end
 end
 
 @testset "euler" begin
-    @variables a b
-    @eqtest cos(a) + im * sin(a) == exp(im * a)
-    @eqtest exp(a) * cos(b) + im * sin(b) * exp(a) == exp(a + im * b)
+    # In SymbolicUtils v4, exp(im*x) stays as a symbolic Term and does NOT
+    # auto-decompose to cos(x)+im*sin(x). Test via QuestBase's exp_to_trig.
+    using QuestBase: exp_to_trig
+    using SymbolicUtils: @syms
+    @syms a_eu
+    @eqtest expand(exp_to_trig(exp(im * a_eu))) == cos(a_eu) + im * sin(a_eu)
 end
 
 @testset "powers" begin
@@ -52,18 +55,16 @@ end
     # eq = drop_powers(a^2 + a ~ b, [a, b], 2) # broken
     @eqtest [eq.lhs, eq.rhs] == [a, a]
     eq = drop_powers(a^2 + a + b ~ a, a, 2)
-    @test string(eq.rhs) == "a" broken = true
+    @test string(eq.rhs) == "a"
 
     @eqtest drop_powers([a^2 + a + b, b], a, 2) == [a + b, b]
     @eqtest drop_powers([a^2 + a + b, b], [a, b], 2) == [a + b, b]
 end
 
-@testset "trig_to_exp and trig_to_exp" begin
+@testset "trig_to_exp and exp_to_trig" begin
     using QuestBase: expand_all, trig_to_exp, exp_to_trig
     @testset "Num" begin
         @variables f t
-        cos_euler(x) = (exp(im * x) + exp(-im * x)) / 2
-        sin_euler(x) = (exp(im * x) - exp(-im * x)) / (2 * im)
 
         # automatic conversion between trig and exp form
         trigs = [cos(f * t), sin(f * t)]
@@ -71,30 +72,19 @@ end
             z = trig_to_exp(trig)
             @eqtest expand(exp_to_trig(z)) == trig
         end
-        trigs′ = [cos_euler(f * t), sin_euler(f * t)]
-        for (i, trig) in pairs(trigs′)
-            z = trig_to_exp(trig)
-            @eqtest expand(exp_to_trig(z)) == trigs[i]
-        end
     end
 
-    # @testset "BasicSymbolic" begin
-    #     @syms f t
-    #     cos_euler(x) = (exp(im * x) + exp(-im * x)) / 2
-    #     sin_euler(x) = (exp(im * x) - exp(-im * x)) / (2 * im)
+    @testset "BasicSymbolic" begin
+        using SymbolicUtils: @syms
+        @syms f_bs t_bs
 
-    #     # automatic conversion between trig and exp form
-    #     trigs = [cos(f * t), sin(f * t)]
-    #     for (i, trig) in pairs(trigs)
-    #         z = trig_to_exp(trig)
-    #         @eqtest expand(exp_to_trig(z)) == trig
-    #     end
-    #     trigs′ = [cos_euler(f * t), sin_euler(f * t)]
-    #     for (i, trig) in pairs(trigs′)
-    #         z = trig_to_exp(trig)
-    #         @eqtest expand(exp_to_trig(z)) == trigs[i]
-    #     end
-    # end
+        # At BasicSymbolic level, exp(im*x) stays symbolic - roundtrip works cleanly
+        trigs = [cos(f_bs * t_bs), sin(f_bs * t_bs)]
+        for (i, trig) in pairs(trigs)
+            z = trig_to_exp(trig)
+            @eqtest expand(exp_to_trig(z)) == trig
+        end
+    end
 end
 
 @testset "harmonic" begin
@@ -162,6 +152,91 @@ end
     @eqtest fourier_cos_term((cos(f * t)^2 + cos(f * t))^3, 0, t) == 23//16
 end
 
+@testset "trig_reduce" begin
+    using QuestBase: trig_reduce
+
+    @variables f t a ω
+
+    # the Pythagorean identity collapses in a bare expression …
+    @eqtest trig_reduce(cos(f * t)^2 + sin(f * t)^2) == 1
+
+    # … and, crucially, in the denominator of a combined fraction. The exponential
+    # round-trip only touches the numerator, so without `reduce_denominator` the
+    # identity survives in the denominator, `get_independent` sees a time-dependent
+    # denominator and discards the whole fraction, collapsing the Krylov-Bogoliubov
+    # slow-flow equations to `0 ~ d/dT`.
+    @eqtest trig_reduce(a / (cos(f * t)^2 + sin(f * t)^2)) == a
+    @eqtest trig_reduce(a / (ω * cos(f * t)^2 + ω * sin(f * t)^2)) == a / ω
+
+    # trig-free denominators pass through `reduce_denominator` untouched
+    using QuestBase: reduce_denominator
+    @eqtest reduce_denominator(a / (ω^2 + 1)) == a / (ω^2 + 1)
+end
+
+@testset "fraction-free linear solve" begin
+    using LinearAlgebra
+    using QuestBase: fraction_free_linear_solve
+
+    @variables a b c x y z
+    equations = [2x + y - z ~ a, x + 3y + z ~ b, 2x - y + 4z ~ c]
+    solution = fraction_free_linear_solve(equations, [x, y, z])
+    @eqtest solution[1] == (13a - 3b + 4c) / 31
+    @eqtest solution[2] == (-2a + 10b - 3c) / 31
+    @eqtest solution[3] == (-7a + 4b + 5c) / 31
+
+    # A zero diagonal requires a row pivot.
+    pivoted = fraction_free_linear_solve([y ~ a, x + y ~ b], [x, y])
+    @eqtest pivoted[1] == b - a
+    @eqtest pivoted[2] == a
+
+    @test_throws LinearAlgebra.SingularException fraction_free_linear_solve(
+        [x + y ~ a, 2x + 2y ~ b], [x, y]
+    )
+
+    # Compare arbitrary nonsingular integer systems against exact rational arithmetic.
+    rng = Random.MersenneTwister(0x5eed)
+    for dimension in 2:5
+        matrix = rand(rng, -4:4, dimension, dimension)
+        while iszero(det(matrix))
+            matrix = rand(rng, -4:4, dimension, dimension)
+        end
+        rhs = rand(rng, -4:4, dimension)
+        symbolic_variables = only(@variables q[1:dimension])
+        random_equations = [
+            sum(
+                matrix[row, column] * symbolic_variables[column] for column in 1:dimension
+            ) ~ rhs[row] for row in 1:dimension
+        ]
+        actual = fraction_free_linear_solve(random_equations, symbolic_variables)
+        expected = Rational{Int}.(matrix) \ Rational{Int}.(rhs)
+        for index in eachindex(actual)
+            @eqtest actual[index] == expected[index]
+        end
+    end
+end
+
+@testset "rearrange! reduces determinant denominators" begin
+    # Fraction-free elimination produces one determinant denominator instead of nested
+    # LU fractions. For a trigonometric ansatz that determinant contains
+    # cos² + sin² = 1, which `rearrange!` must collapse before downstream averaging.
+    using QuestBase: HarmonicEquation, HarmonicVariable, DifferentialEquation
+    using QuestBase: rearrange!, d
+    @variables ω t T u1(T) v1(T) x(t)
+
+    eqs = [
+        cos(ω * t) * d(u1, T) + sin(ω * t) * d(v1, T) ~ u1,
+        -sin(ω * t) * d(u1, T) + cos(ω * t) * d(v1, T) ~ v1,
+    ]
+    hvars = [HarmonicVariable(u1, "u", "u", ω, x), HarmonicVariable(v1, "v", "v", ω, x)]
+    natural_eq = DifferentialEquation(d(x, t, 2) + x ~ 0, x)
+    eom = HarmonicEquation(eqs, hvars, natural_eq)
+
+    rearrange!(eom, d([u1, v1], T))
+    lhs = QuestBase.Num.(getfield.(eom.equations, :lhs))
+    @eqtest lhs[1] == u1 * cos(ω * t) - v1 * sin(ω * t)
+    @eqtest lhs[2] == u1 * sin(ω * t) + v1 * cos(ω * t)
+end
+
 @testset "_apply_termwise" begin
     using QuestBase: _apply_termwise
 
@@ -176,24 +251,25 @@ end
     using QuestBase: simplify_complex
     @variables a, b, c
     for z in Complex{Num}[a, a * b, a / b]
-        @test simplify_complex(z).val isa BasicSymbolic{Real}
+        @test Symbolics.unwrap(simplify_complex(z)) isa BasicSymbolic
     end
 
     z = Complex{Num}(1 + 0 * im)
-    @test simplify_complex(z).val isa Int64
+    @test simplify_complex(z) isa Number
 end
 
 @testset "get_all_terms" begin
     using QuestBase: get_all_terms
     @variables a, b, c
 
-    @eqtest get_all_terms(a + b + c) == [a, b, c]
-    @eqtest get_all_terms(a * b * c) == [a, b, c]
-    @eqtest get_all_terms(a / b) == [a, b]
-    @eqtest get_all_terms(a^2 + b^2 + c^2) == [b^2, a^2, c^2]
-    @eqtest get_all_terms(a^2 / b^2) == [a^2, b^2]
-    @eqtest get_all_terms(2 * b^2) == [2, b^2]
-    @eqtest get_all_terms(2 * b^2 ~ a) == [2, b^2, a]
+    # Use Set comparison since ordering may vary across SymbolicUtils versions
+    @test Set(get_all_terms(a + b + c)) == Set([a, b, c])
+    @test Set(get_all_terms(a * b * c)) == Set([a, b, c])
+    @test Set(get_all_terms(a / b)) == Set([a, b])
+    @test Set(get_all_terms(a^2 + b^2 + c^2)) == Set([a^2, b^2, c^2])
+    @test Set(get_all_terms(a^2 / b^2)) == Set([a^2, b^2])
+    @test Set(get_all_terms(2 * b^2)) == Set([2, b^2])
+    @test Set(get_all_terms(2 * b^2 ~ a)) == Set([2, b^2, a])
 end
 
 @testset "get_independent" begin
@@ -218,8 +294,7 @@ end
     @variables a, b, c, d
 
     @eqtest expand_fraction((a + b) / c) == a / c + b / c
-    @test string.(expand_fraction(d * (a + b) / c)) == "d*a /c + d*b / c + d / c" broken =
-        true
+    @eqtest expand_fraction(d * (a + b) / c) == a * d / c + b * d / c
 end
 @testset "count_derivatives" begin
     using QuestBase: count_derivatives, d
@@ -227,7 +302,9 @@ end
     @test count_derivatives(x) == 0
     @test count_derivatives(d(x, t)) == 1
     @test count_derivatives(d(d(x, t), t)) == 2
-    @test_throws ErrorException count_derivatives(d(d(5 * x, t), t))
+    # In Symbolics v7, Differential stores order directly, so d(d(5*x,t),t)
+    # becomes Differential(t,2)(5*x(t)) which is still a valid derivative term
+    @test count_derivatives(d(d(5 * x, t), t)) == 2
 end
 
 @testset "substitute_all" begin

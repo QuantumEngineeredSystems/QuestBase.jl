@@ -8,11 +8,12 @@
     all_concrete(QuestBase.DifferentialEquation)
     all_concrete(QuestBase.HarmonicVariable)
 end
-if VERSION < v"1.12.0-beta"
-    @testset "Code linting" begin
-        using JET
-        JET.test_package(QuestBase; target_defined_modules=true)
-    end
+
+@testset "Code linting" begin
+    using JET
+    rep = report_package(QuestBase; target_modules=(QuestBase,))
+    @show rep
+    @test length(JET.get_reports(rep)) == 0
 end
 
 @testset "Code quality" begin

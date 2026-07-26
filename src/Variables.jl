@@ -24,10 +24,6 @@ end
 
 "Return the name of a variable (excluding independent variables)"
 function var_name(x::Num)::String
-    var = Symbolics._toexpr(x)
-    var = var isa Expr ? String(var.args[1]) : String(var)
-    return String(replace(var, r"\\mathtt\{([^}]*)\}" => s"\1"))
-    # ^ remove "\\mathtt{}" from the variable name coming from Symbolics
-    # since Symbolics v6.14.1 (Symbolics#1305)
+    return String(tosymbol(x; escape=false))
 end
-var_name(x::SymbolicUtils.Sym) = String(x.name)
+var_name(x::BasicSymbolic) = issym(x) ? String(nameof(x)) : error("Expected a Sym")

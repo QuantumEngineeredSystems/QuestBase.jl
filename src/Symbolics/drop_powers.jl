@@ -17,10 +17,16 @@ function drop_powers(expr::Num, vars::Vector{Num}, deg::Int)
     Symbolics.@variables ϵ
     subs_expr = deepcopy(expr)
     rules = Dict([var => ϵ * var for var in unique(vars)])
-    subs_expr = Symbolics.expand(substitute_all(subs_expr, rules))
+    subs_expr = Symbolics.expand(
+        substitute_all(subs_expr, rules; include_derivatives=false)
+    )
     max_deg = max_power(subs_expr, ϵ)
     removal = Dict([ϵ^d => Num(0) for d in deg:max_deg])
-    res = substitute_all(substitute_all(subs_expr, removal), Dict(ϵ => Num(1)))
+    res = substitute_all(
+        substitute_all(subs_expr, removal; include_derivatives=false),
+        Dict(ϵ => Num(1));
+        include_derivatives=false,
+    )
     return Symbolics.expand(res)
 end
 
@@ -30,7 +36,7 @@ end
 
 # calls the above for various types of the first argument
 function drop_powers(eq::Equation, var::Vector{Num}, deg::Int)
-    return drop_powers(eq.lhs, var, deg) .~ drop_powers(eq.lhs, var, deg)
+    return drop_powers(eq.lhs, var, deg) .~ drop_powers(eq.rhs, var, deg)
 end
 function drop_powers(eqs::Vector{Equation}, var::Vector{Num}, deg::Int)
     return [
@@ -54,13 +60,14 @@ max_power(x, t) = max_power(wrap(x), wrap(t))
 
 "Return the power of `y` in the term `x`"
 function power_of(x::Num, y::Num)
-    issym(y.val) ? nothing : error("power of " * string(y) * " is ambiguous")
-    return power_of(x.val, y.val)
+    issym(unwrap(y)) ? nothing : error("power of " * string(y) * " is ambiguous")
+    return power_of(unwrap(x), unwrap(y))
 end
 
 function power_of(x::BasicSymbolic, y::BasicSymbolic)
     if ispow(x) && issym(y)
-        return isequal(x.base, y) ? x.exp : 0
+        args = arguments(x)
+        return isequal(args[1], y) ? unwrap_const(args[2]) : 0
     elseif issym(x) && issym(y)
         return isequal(x, y) ? 1 : 0
     else

@@ -65,7 +65,7 @@ mutable struct DifferentialEquation
     function DifferentialEquation(eq::Equation, vars::Vector{Num})
         typerhs = typeof(eq.rhs)
         typelhs = typeof(eq.lhs)
-        throw(
+        return throw(
             ArgumentError(
                 "The variables are of type $(typeof(vars)). Whereas you gave one equation of
                 type $(typerhs)~$(typelhs). Commenly one forgot to broadcast the equation symbol `~`.",
@@ -87,19 +87,14 @@ function Base.show(io::IO, diff_eq::DifferentialEquation)
     println(io, "\n")
     return [println(io, eq) for eq in values(diff_eq.equations)]
 end
-"
-Displays the fields of the differential equation object.
-"
-Base.show(eom::DifferentialEquation) = show_fields(eom)
 
 """
 $(TYPEDSIGNATURES)
 
 Return the dependent variables of `diff_eom`.
 """
-Symbolics.get_variables(diff_eom::DifferentialEquation)::Vector{Num} = collect(
-    keys(diff_eom.equations)
-)
+Symbolics.get_variables(diff_eom::DifferentialEquation)::Vector{Num} =
+    collect(keys(diff_eom.equations))
 
 """
 $(TYPEDSIGNATURES)
@@ -108,9 +103,8 @@ Check if all equations in `diff_eom` are harmonic with respect to `t`. The funct
 differential equation system `diff_eom` and a variable `t`, and returns `true` if all equations
 are harmonic with respect to `t`, otherwise it returns `false`.
 """
-QuestBase.is_harmonic(diff_eom::DifferentialEquation, t::Num)::Bool = all([
-    is_harmonic(eq, t) for eq in values(diff_eom.equations)
-])
+QuestBase.is_harmonic(diff_eom::DifferentialEquation, t::Num)::Bool =
+    all([is_harmonic(eq, t) for eq in values(diff_eom.equations)])
 
 """
 $(TYPEDSIGNATURES)
@@ -118,7 +112,7 @@ $(TYPEDSIGNATURES)
 Return the independent dependent variables of `diff_eom`.
 """
 function get_independent_variables(diff_eom::DifferentialEquation)
-    return Num.(flatten(unique([x.val.arguments for x in keys(diff_eom.equations)])))
+    return Num.(flatten(unique([arguments(unwrap(x)) for x in keys(diff_eom.equations)])))
 end
 
 """
@@ -188,14 +182,23 @@ the left-hand sides. Uses symbolic linear solving to determine the right-hand si
 the equations in place.
 """
 function rearrange!(eom::DifferentialEquation, new_lhs::Vector{Num})
-    soln = Symbolics.symbolic_linear_solve(
-        get_equations(eom), new_lhs; simplify=false, check=true
-    )
-    eom.equations = OrderedDict(zip(get_variables_nums(new_lhs), new_lhs .~ soln))
+    soln = try
+        fraction_free_linear_solve(get_equations(eom), new_lhs)
+    catch error
+        error isa BareissFailure || rethrow()
+        Num.(
+            Symbolics.symbolic_linear_solve(
+                get_equations(eom), new_lhs; simplify=false, check=true
+            ),
+        )
+    end
+    # Use original variable keys (not extracted from new_lhs, as v7's get_variables
+    # treats derivatives as variables)
+    eom.equations = OrderedDict(zip(collect(keys(eom.equations)), new_lhs .~ soln))
     return nothing
 end
 function get_variables_nums(vars::Vector{Num})
-    unique(flatten([Num.(get_variables(x)) for x in vars]))
+    return unique(flatten([Num.(get_variables(x)) for x in vars]))
 end # TODO: remove this function or at least better names
 
 """

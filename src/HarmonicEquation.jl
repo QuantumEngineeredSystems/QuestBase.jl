@@ -69,11 +69,17 @@ source_type(eom::HarmonicEquation{T}) where {T} = T
 
 "Get the parameters (not time nor variables) of a HarmonicEquation"
 function _parameters(eom::HarmonicEquation)
-    all_symbols = flatten([
-        cat(get_variables(eq.lhs), get_variables(eq.rhs); dims=1) for eq in eom.equations
-    ])
+    all_symbols = Num[]
+    for eq in eom.equations
+        for v in collect(Symbolics.get_variables(eq.lhs))
+            is_derivative(v) || push!(all_symbols, Num(v))
+        end
+        for v in collect(Symbolics.get_variables(eq.rhs))
+            is_derivative(v) || push!(all_symbols, Num(v))
+        end
+    end
     # subtract the set of independent variables (i.e., time) from all free symbols
-    return setdiff(all_symbols, get_variables(eom), get_independent_variables(eom))
+    return unique(setdiff(all_symbols, get_variables(eom), get_independent_variables(eom)))
 end
 
 """
@@ -130,7 +136,7 @@ Return the independent variables (typically time) of `eom`.
 """
 function get_independent_variables(eom::HarmonicEquation)::Vector{Num}
     dynamic_vars = flatten(getfield.(eom.variables, Symbol("symbol")))
-    return flatten(unique([SymbolicUtils.arguments(var.val) for var in dynamic_vars]))
+    return flatten(unique([arguments(unwrap(var)) for var in dynamic_vars]))
 end
 
 _remove_brackets(var::Num) = declare_variable(var_name(var))
@@ -172,9 +178,16 @@ end
 
 "Rearrange an equation system such that the field equations is equal to the vector specified in new_lhs"
 function rearrange!(eom::HarmonicEquation, new_rhs::Vector{Num})
-    soln = Symbolics.symbolic_linear_solve(
-        eom.equations, new_rhs; simplify=false, check=true
-    )
+    soln = try
+        fraction_free_linear_solve(eom.equations, new_rhs)
+    catch error
+        error isa BareissFailure || rethrow()
+        fallback = Symbolics.symbolic_linear_solve(
+            eom.equations, new_rhs; simplify=false, check=true
+        )
+        Symbolics.simplify_fractions.(Num.(fallback))
+    end
+    soln = reduce_denominator.(soln)
     eom.equations = soln .~ new_rhs
     return nothing
 end

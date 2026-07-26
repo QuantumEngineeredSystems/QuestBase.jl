@@ -41,7 +41,7 @@ using QuestBase:
     expr = d(x, t, 2) + ω0^2 * x
     diff_eq3 = DifferentialEquation(expr, x)
     @test length(diff_eq3.equations) == 1
-    @test diff_eq3.equations[x].rhs == 0
+    @test isequal(Num(diff_eq3.equations[x].rhs), Num(0))
 
     # Test empty constructor
     diff = DifferentialEquation()
@@ -85,6 +85,34 @@ end
     new_eq = rearrange(diff_eq, [x])
     @test new_eq !== diff_eq  # Should be a new instance
     @eqtest new_eq != diff_eq
+end
+
+@testset "State-dependent derivative mass matrix" begin
+    @variables α β μ γx γy kx ky Fx Fy
+    ẍ = d(x, t, 2)
+    ÿ = d(y, t, 2)
+    ẋ = d(x, t)
+    ẏ = d(y, t)
+
+    m11 = 1 + α * x^2
+    m12 = μ * x
+    m21 = μ * y
+    m22 = 1 + β * y^2
+    force_x = Fx * cos(ω * t) - γx * ẋ - kx * x
+    force_y = Fy * sin(ω * t) - γy * ẏ - ky * y
+    equations = [m11 * ẍ + m12 * ÿ ~ force_x, m21 * ẍ + m22 * ÿ ~ force_y]
+    system = DifferentialEquation(equations, [x, y])
+
+    rearrange_standard!(system)
+    rearranged = collect(values(system.equations))
+    determinant = m11 * m22 - m12 * m21
+
+    @eqtest rearranged[1].lhs == ẍ
+    @eqtest rearranged[2].lhs == ÿ
+    @eqtest rearranged[1].rhs ==
+        Symbolics.expand(m22 * force_x - m12 * force_y) / Symbolics.expand(determinant)
+    @eqtest rearranged[2].rhs ==
+        Symbolics.expand(m11 * force_y - m21 * force_x) / Symbolics.expand(determinant)
 end
 
 @testset "Error Cases" begin
