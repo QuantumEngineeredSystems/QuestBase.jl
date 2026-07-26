@@ -19,7 +19,8 @@ using QuestBase:
     @eqtest,
     get_all_terms,
     get_independent,
-    source
+    source,
+    source_type
 
 # Setup common test variables
 @variables t, T
@@ -40,10 +41,11 @@ hv2 = HarmonicVariable(v, "test", "v", Num(1.0), y)
     heq1 = HarmonicEquation([eq1, eq2], [hv1, hv2], nat_eq)
     heq2 = HarmonicEquation([eq1, eq2], [hv1, hv2], Num[], nat_eq)
     for heq in [heq1, heq2]
-        heq = heq1
         @test heq.equations == [eq1, eq2]
         @test heq.variables == [hv1, hv2]
         @test source(heq) == nat_eq
+        @test source_type(heq) == DifferentialEquation
+        @test heq isa HarmonicEquation{DifferentialEquation}
         @test heq.parameters == Num[]
         @test heq.jacobian isa Matrix{Num}
     end
@@ -52,6 +54,11 @@ hv2 = HarmonicVariable(v, "test", "v", Num(1.0), y)
         [eq1, eq2], [hv1, hv2], Num[], Num[1 1; 1 1], DifferentialEquation()
     )
     @test isempty(source(heq3).harmonics)
+
+    # the source system is not restricted to a DifferentialEquation
+    heq4 = HarmonicEquation([eq1, eq2], [hv1, hv2], Num[], Num[1 1; 1 1], "meanfield")
+    @test source(heq4) == "meanfield"
+    @test source_type(heq4) == String
 end
 
 @testset "Parameter handling" begin

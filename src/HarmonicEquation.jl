@@ -1,10 +1,14 @@
-# TODO replace link with HarmonicBalance link
 """
 $(TYPEDEF)
 
-Holds a set of algebraic equations governing the harmonics of a
-[`DifferentialEquation`](@ref). HarmonicEquation can also be constructed from a
-[`QuantumCumulants.MeanfieldEquations`](https://qojulia.github.io/QuantumCumulants.jl/stable/api/#QuantumCumulants.MeanfieldEquations)`.
+Holds a set of algebraic equations governing the harmonics of a system of equations of
+motion. The system it was derived from is retained in `source_equations` and is retrievable
+with [`source`](@ref); its type is the type parameter `T` and is retrievable with
+[`source_type`](@ref).
+
+Typically `T` is a [`DifferentialEquation`](@ref), but a `HarmonicEquation` can also be
+derived from a
+[`QuantumCumulants.MeanfieldEquations`](https://qojulia.github.io/QuantumCumulants.jl/stable/api/#QuantumCumulants.MeanfieldEquations).
 
 # Fields
 $(TYPEDFIELDS)
@@ -16,9 +20,9 @@ mutable struct HarmonicEquation{T}
     variables::Vector{HarmonicVariable}
     """The parameters of the equation set."""
     parameters::Vector{Num}
-    "The Jacobian of the natural equation."
+    "The Jacobian of the harmonic equations."
     jacobian::Matrix{Num}
-    "The system where the HarmonicEquation is derived from."
+    "The system of equations of motion the harmonic equations were derived from."
     source_equations::T
 
     # use a self-referential constructor with _parameters
@@ -43,14 +47,14 @@ mutable struct HarmonicEquation{T}
         equations::Vector{Equation},
         variables::Vector{HarmonicVariable},
         parameters::Vector{Num},
-        natural_equation::DifferentialEquation,
+        source_equations::DifferentialEquation,
     )
         return new{DifferentialEquation}(
             equations,
             variables,
             parameters,
             dummy_symbolic_Jacobian(length(variables)),
-            natural_equation,
+            source_equations,
         )
     end
     function HarmonicEquation(
@@ -64,7 +68,24 @@ mutable struct HarmonicEquation{T}
     end
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Return the system of equations of motion `eom` was derived from, e.g. the
+[`DifferentialEquation`](@ref) the harmonic ansatz was applied to.
+
+See also [`source_type`](@ref).
+"""
 source(eom::HarmonicEquation) = eom.source_equations
+
+"""
+$(TYPEDSIGNATURES)
+
+Return the type of the system of equations of motion `eom` was derived from. Use this to
+dispatch on the origin of a `HarmonicEquation` without materialising the source system.
+
+See also [`source`](@ref).
+"""
 source_type(eom::HarmonicEquation{T}) where {T} = T
 
 "Get the parameters (not time nor variables) of a HarmonicEquation"

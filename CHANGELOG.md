@@ -5,6 +5,24 @@ All notable changes to QuestBase.jl will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3]
+
+### Added
+
+- `QuestBase.source(eom)` returns the system of equations of motion a `HarmonicEquation` was derived from.
+- `QuestBase.source_type(eom)` returns that system's type, for dispatching on the origin of a `HarmonicEquation`.
+
+### Changed
+
+The internals of `HarmonicEquation` changed so that harmonic equations no longer have to come
+from a second-order `DifferentialEquation`. They can now be derived from, for example,
+`QuantumCumulants.MeanfieldEquations`. These fields and constructors are not part of the
+public API, but downstream packages reaching into them need to be updated:
+
+- `HarmonicEquation` is now parametrised on the type of the system it was derived from: `HarmonicEquation{T}`. Code annotating the type in a struct field or type parameter has to account for the extra parameter.
+- The `natural_equation::DifferentialEquation` field was replaced by `source_equations::T`. Use `QuestBase.source(eom)` instead of `eom.natural_equation`.
+- The field order changed: `jacobian` now precedes `source_equations`. The five-argument constructor is `HarmonicEquation(equations, variables, parameters, jacobian, source_equations)` and takes the source system explicitly, where it previously defaulted to an empty `DifferentialEquation()`.
+
 ## [0.4.0] - 2026-03-10
 
 ### Breaking
