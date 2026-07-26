@@ -1,22 +1,29 @@
 """
 $(TYPEDEF)
 
-Holds a set of algebraic equations governing the harmonics of a `DifferentialEquation`.
+Holds a set of algebraic equations governing the harmonics of a system of equations of
+motion. The system it was derived from is retained in `source_equations` and is retrievable
+with [`source`](@ref); its type is the type parameter `T` and is retrievable with
+[`source_type`](@ref).
+
+Typically `T` is a [`DifferentialEquation`](@ref), but a `HarmonicEquation` can also be
+derived from a
+[`QuantumCumulants.MeanfieldEquations`](https://qojulia.github.io/QuantumCumulants.jl/stable/api/#QuantumCumulants.MeanfieldEquations).
 
 # Fields
 $(TYPEDFIELDS)
 """
-mutable struct HarmonicEquation
+mutable struct HarmonicEquation{T}
     """A set of equations governing the harmonics."""
     equations::Vector{Equation}
     """A set of variables describing the harmonics."""
     variables::Vector{HarmonicVariable}
     """The parameters of the equation set."""
     parameters::Vector{Num}
-    "The natural equation (before the harmonic ansatz was used)."
-    natural_equation::DifferentialEquation
-    "The Jacobian of the natural equation."
+    "The Jacobian of the harmonic equations."
     jacobian::Matrix{Num}
+    "The system of equations of motion the harmonic equations were derived from."
+    source_equations::T
 
     # use a self-referential constructor with _parameters
     function HarmonicEquation(
@@ -25,12 +32,12 @@ mutable struct HarmonicEquation
         nat_eq::DifferentialEquation,
     )
         return (
-            x=new(
+            x=new{DifferentialEquation}(
                 equations,
                 variables,
                 Num[],
-                nat_eq,
                 dummy_symbolic_Jacobian(length(variables)),
+                nat_eq,
             );
             x.parameters=_parameters(x);
             x
@@ -40,14 +47,14 @@ mutable struct HarmonicEquation
         equations::Vector{Equation},
         variables::Vector{HarmonicVariable},
         parameters::Vector{Num},
-        natural_equation::DifferentialEquation,
+        source_equations::DifferentialEquation,
     )
-        return new(
+        return new{DifferentialEquation}(
             equations,
             variables,
             parameters,
-            natural_equation,
             dummy_symbolic_Jacobian(length(variables)),
+            source_equations,
         )
     end
     function HarmonicEquation(
@@ -55,10 +62,31 @@ mutable struct HarmonicEquation
         variables::Vector{HarmonicVariable},
         parameters::Vector{Num},
         jacobian::Matrix{Num},
-    )
-        return new(equations, variables, parameters, DifferentialEquation(), jacobian)
+        source_equations::T,
+    ) where {T}
+        return new{T}(equations, variables, parameters, jacobian, source_equations)
     end
 end
+
+"""
+$(TYPEDSIGNATURES)
+
+Return the system of equations of motion `eom` was derived from, e.g. the
+[`DifferentialEquation`](@ref) the harmonic ansatz was applied to.
+
+See also [`source_type`](@ref).
+"""
+source(eom::HarmonicEquation) = eom.source_equations
+
+"""
+$(TYPEDSIGNATURES)
+
+Return the type of the system of equations of motion `eom` was derived from. Use this to
+dispatch on the origin of a `HarmonicEquation` without materialising the source system.
+
+See also [`source`](@ref).
+"""
+source_type(eom::HarmonicEquation{T}) where {T} = T
 
 "Get the parameters (not time nor variables) of a HarmonicEquation"
 function _parameters(eom::HarmonicEquation)

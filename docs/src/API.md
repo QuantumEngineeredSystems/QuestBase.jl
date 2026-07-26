@@ -34,6 +34,8 @@ QuestBase.add_harmonic!
 
 ```@docs
 QuestBase.HarmonicEquation
+QuestBase.source
+QuestBase.source_type
 QuestBase.get_independent_variables(::QuestBase.HarmonicEquation)
 QuestBase.get_variables(::QuestBase.HarmonicEquation)
 QuestBase.rearrange_standard(::QuestBase.HarmonicEquation)

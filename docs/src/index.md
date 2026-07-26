@@ -12,7 +12,7 @@ to paint the overarching picture and document the shared/common functionality.
 
 A package for applying the harmonic balance method to classical driven nonlinear resonators.
 It computes the stroboscopic effective equations of motion of the system at the characteristic response frequencies of the system.
-Both [Krylov-Bogoliubov](https://quantumengineeredsystems.github.io/HarmonicBalance.jl/stable/manual/extracting_harmonics#Krylov-Bogoliubov) averaging method to higher orders and the [harmonic balance method](https://quantumengineeredsystems.github.io/HarmonicBalance.jl/stable/manual/extracting_harmonics#Krylov-Bogoliubov) are implemented.
+Both [Krylov-Bogoliubov](https://quantumengineeredsystems.github.io/HarmonicBalance.jl/stable/manual/extracting_harmonics/#Krylov-Bogoliubov) averaging method to higher orders and the [harmonic balance method](https://quantumengineeredsystems.github.io/HarmonicBalance.jl/stable/manual/extracting_harmonics/#Harmonic_Balance) are implemented.
 
 ### [HarmonicSteadyState.jl](https://github.com/QuantumEngineeredSystems/HarmonicSteadyState.jl)
 
