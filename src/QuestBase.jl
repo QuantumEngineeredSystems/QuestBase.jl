@@ -40,6 +40,7 @@ using Symbolics:
 include("utils.jl")
 include("Symbolics/Symbolics_utils.jl")
 include("Symbolics/exponentials.jl")
+include("Symbolics/pythagorean.jl")
 include("Symbolics/fourier.jl")
 include("Symbolics/drop_powers.jl")
 include("Symbolics/linear_solve.jl")

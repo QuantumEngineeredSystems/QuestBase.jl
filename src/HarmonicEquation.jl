@@ -208,6 +208,10 @@ function rearrange!(eom::HarmonicEquation, new_rhs::Vector{Num})
         )
         Symbolics.simplify_fractions.(Num.(fallback))
     end
+    # SymbolicUtils 4 leaves `cos(x)^2 + sin(x)^2` standing, and these solutions carry the
+    # coefficient determinant in their denominator, so without collapsing it the expressions
+    # grow every time a system is rearranged.
+    soln = collapse_pythagorean.(soln)
     soln = reduce_denominator.(soln)
     eom.equations = soln .~ new_rhs
     return nothing
