@@ -149,6 +149,98 @@ function _fourier_term(x, ω, t, f)
 end
 
 """
+    fourier_terms(x, t, specs)
+
+Coefficients of `f(ω*t)` in `x` for every `(ω, f)` pair in `specs`, where each `f` is
+`cos` or `sin` and `ω == 0` selects the time-independent part.
+
+Equivalent to `[_fourier_term(x, ω, t, f) for (ω, f) in specs]` but expands `x` once
+instead of once per pair. Extracting one harmonic with [`_fourier_term`](@ref) costs a
+full exponential round trip (`trig_reduce`) of `x * f(ω*t)`, and an ansatz with `n`
+harmonics asks for `2n` of them from the same `x`. [`trig_reduce`](@ref) already
+linearises `x` into a sum of `coefficient * cos(kωt)` and `coefficient * sin(kωt)`, so
+after one call every coefficient can be read straight off that sum.
+
+Falls back to `_fourier_term` per pair whenever the reduced expression is not linear in
+the trig atoms, so an input `trig_reduce` cannot fully linearise still gets the right
+answer, just at the old cost.
+"""
+function fourier_terms(x::Equation, t, specs)
+    lhs = fourier_terms(x.lhs, t, specs)
+    rhs = fourier_terms(x.rhs, t, specs)
+    return [Equation(l, r) for (l, r) in zip(lhs, rhs)]
+end
+
+function fourier_terms(x, t, specs)
+    buckets = _harmonic_buckets(trig_reduce(x), t)
+    isnothing(buckets) && return [_fourier_term(x, ω, t, f) for (ω, f) in specs]
+    dc, harmonics = buckets
+    return [_bucket_term(dc, harmonics, ω, t, f) for (ω, f) in specs]
+end
+
+"""
+Split a [`trig_reduce`](@ref)d expression into its time-independent part and a
+`trig atom => coefficient` mapping. Returns `nothing` if `x` is not linear in trig atoms
+whose argument involves `t`, which is the signal to fall back to the per-harmonic path.
+"""
+function _harmonic_buckets(x, t)
+    u = unwrap(x)
+    den = Num(1)
+    if isdiv(u)
+        num, d = arguments(u)
+        is_function(d, t) && return nothing # t survives in the denominator
+        den = wrap(d)
+        u = num
+    end
+    addends = isadd(u) ? collect(arguments(u)) : [u]
+    dc = Num(0)
+    harmonics = Dict{Any,Num}()
+    for addend in addends
+        factors = ismul(addend) ? collect(arguments(addend)) : [addend]
+        trigs = filter(z -> is_trig(z) && is_function(z, t), factors)
+        if isempty(trigs)
+            is_function(addend, t) && return nothing # t-dependent but not through a trig
+            dc += wrap(addend) / den
+            continue
+        end
+        length(trigs) == 1 || return nothing # product of harmonics, not linearised
+        trig = only(trigs)
+        ispow(unwrap(trig)) && return nothing # power of a harmonic, not linearised
+        rest = Num(1)
+        for factor in factors
+            isequal(factor, trig) || (rest *= wrap(factor))
+        end
+        is_function(rest, t) && return nothing
+        harmonics[trig] = get(harmonics, trig, Num(0)) + rest / den
+    end
+    return dc, harmonics
+end
+
+"Read the `f(ω*t)` coefficient out of the buckets built by [`_harmonic_buckets`](@ref)."
+function _bucket_term(dc, harmonics, ω, t, f)
+    isequal(ω, 0) && return Symbolics.expand(dc)
+    for (trig, coefficient) in harmonics
+        node = unwrap(trig)
+        operation(node) === f || continue
+        arg = wrap(first(arguments(node)))
+        # trig_reduce normalises signs via cos(-a) = cos(a) and sin(-a) = -sin(a),
+        # so the stored atom may carry the negated argument.
+        if _vanishes(arg - ω * t)
+            return Symbolics.expand(coefficient)
+        elseif _vanishes(arg + ω * t)
+            return Symbolics.expand(f === cos ? coefficient : -coefficient)
+        end
+    end
+    return Num(0)
+end
+
+function _vanishes(x)
+    val = unwrap(Symbolics.expand(x))
+    val = val isa BasicSymbolic ? unwrap_const(val) : val
+    return val isa Number && iszero(val)
+end
+
+"""
     trig_to_exp(x::Num)
 
 Convert all trigonometric terms (sin, cos) in expression `x` to their exponential form
