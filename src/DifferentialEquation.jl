@@ -109,6 +109,24 @@ QuestBase.is_harmonic(diff_eom::DifferentialEquation, t::Num)::Bool =
 """
 $(TYPEDSIGNATURES)
 
+Return the terms of `diff_eom` which are not polynomial in its variables, see
+[`nonpolynomial_terms`](@ref). An empty result means every equation is a polynomial in the
+variables and their derivatives, which averaging requires.
+"""
+function nonpolynomial_terms(diff_eom::DifferentialEquation)
+    vars = get_variables(diff_eom)
+    return unique(
+        reduce(
+            vcat,
+            [nonpolynomial_terms(eq, vars) for eq in values(diff_eom.equations)];
+            init=BasicSymbolic[],
+        ),
+    )
+end
+
+"""
+$(TYPEDSIGNATURES)
+
 Return the independent dependent variables of `diff_eom`.
 """
 function get_independent_variables(diff_eom::DifferentialEquation)

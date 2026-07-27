@@ -164,6 +164,74 @@ is_harmonic(x, t) = is_harmonic(Num(x), Num(t))
 is_function(f, var) = unwrap(var) in get_variables(f)
 
 """
+$(TYPEDSIGNATURES)
+
+Return the subexpressions of `x` in which a variable of `vars` (or a derivative of one)
+appears inside an operation other than an addition, a multiplication or a power with a
+non-negative integer exponent. An empty result means `x` is a polynomial in `vars`.
+
+Averaging replaces each variable by a truncated Fourier series and projects the result onto
+the harmonics of the ansatz. Only polynomials map a finite Fourier series onto a finite
+Fourier series, so terms such as `sin(x)`, `exp(x)` or `1/x` cannot be averaged and are
+returned here.
+"""
+function nonpolynomial_terms(x, vars)
+    unwrapped = vars isa AbstractVector ? unwrap.(vars) : [unwrap(vars)]
+    return unique(_collect_nonpolynomial!(BasicSymbolic[], unwrap(x), unwrapped))
+end
+function nonpolynomial_terms(eq::Equation, vars)
+    return unique(
+        cat(nonpolynomial_terms(eq.lhs, vars), nonpolynomial_terms(eq.rhs, vars); dims=1)
+    )
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Return true if `x` is a polynomial in `vars` and their derivatives, i.e. if it has no
+[`nonpolynomial_terms`](@ref).
+"""
+is_polynomial(x, vars) = isempty(nonpolynomial_terms(x, vars))
+
+"Return true if `x` is one of `vars` or contains one of them as a subexpression."
+_contains_variable(x, vars) = any(v -> isequal(x, v), vars)
+function _contains_variable(x::BasicSymbolic, vars)
+    any(v -> isequal(x, v), vars) && return true
+    SymbolicUtils.iscall(x) || return false
+    return any(arg -> _contains_variable(arg, vars), arguments(x))
+end
+
+"Walk `x` and push each subexpression which is not polynomial in `vars` onto `terms`."
+function _collect_nonpolynomial!(terms, x, vars)
+    # a subtree free of `vars` is a coefficient: any operation on it is allowed
+    _contains_variable(x, vars) || return terms
+    any(v -> isequal(x, v), vars) && return terms # a bare variable
+
+    if isadd(x) || ismul(x)
+        for arg in arguments(x)
+            _collect_nonpolynomial!(terms, arg, vars)
+        end
+    elseif ispow(x)
+        base, exponent = arguments(x)
+        power = unwrap_const(exponent)
+        if power isa Real && isinteger(power) && power >= 0
+            _collect_nonpolynomial!(terms, base, vars)
+        else # negative, fractional or symbolic exponent
+            push!(terms, x)
+        end
+    elseif isdiv(x)
+        numerator, denominator = arguments(x)
+        _collect_nonpolynomial!(terms, numerator, vars)
+        _contains_variable(denominator, vars) && push!(terms, x)
+    elseif is_derivative(x)
+        _collect_nonpolynomial!(terms, first(arguments(x)), vars)
+    else # a call such as sin, exp or log applied to something containing a variable
+        push!(terms, x)
+    end
+    return terms
+end
+
+"""
 Counts the number of derivatives of a symbolic variable.
 """
 function count_derivatives(x::BasicSymbolic)
