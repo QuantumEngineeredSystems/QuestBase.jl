@@ -5,12 +5,6 @@ All notable changes to QuestBase.jl will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Added
-
-- `QuestBase.nonpolynomial_terms(x, vars)` returns the subexpressions of `x` which are not polynomial in `vars`, with a method for a whole `DifferentialEquation`, and `QuestBase.is_polynomial(x, vars)` as the corresponding predicate. Averaging silently discards terms such as `sin(x)`, `exp(x)` or `1/x`, so callers can now reject them up front.
-
 ## [0.5.0]
 
 ### Breaking
