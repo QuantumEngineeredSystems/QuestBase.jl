@@ -11,8 +11,9 @@ keeps those expressions small again, at the cost of one bottom-up walk, rather t
 exponential round trip [`trig_reduce`](@ref) needs.
 """
 collapse_pythagorean(x::Num) = wrap(collapse_pythagorean(unwrap(x)))
-collapse_pythagorean(x::Equation) =
-    Equation(collapse_pythagorean(x.lhs), collapse_pythagorean(x.rhs))
+function collapse_pythagorean(x::Equation)
+    return Equation(collapse_pythagorean(x.lhs), collapse_pythagorean(x.rhs))
+end
 function collapse_pythagorean(x)
     x isa BasicSymbolic || return x
     collapsed = Postwalk(_collapse_pythagorean_node)(x)
@@ -87,9 +88,9 @@ function _collapse_pythagorean_node(x)
                 j == i && return false
                 taken[j] && return false
                 isnothing(parts[j]) && return false
-                parts[j][1] === partner_operation &&
-                    isequal(parts[j][2], argument_i) &&
-                    isequal(parts[j][3], coefficient_i)
+                return parts[j][1] === partner_operation &&
+                       isequal(parts[j][2], argument_i) &&
+                       isequal(parts[j][3], coefficient_i)
             end
             if !isnothing(partner)
                 taken[i] = taken[partner] = true
