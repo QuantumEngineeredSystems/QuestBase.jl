@@ -50,6 +50,8 @@ QuestBase contains a number of symbolic utilities to help with the symbolic mani
 
 ```@docs
 QuestBase.d
+QuestBase.nonpolynomial_terms
+QuestBase.is_polynomial
 ```
 
 ### Exponentials

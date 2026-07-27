@@ -103,6 +103,40 @@ end
     @test !is_harmonic(dEOM, t)
 end
 
+@testset "polynomial in the variables" begin
+    using QuestBase: is_polynomial, nonpolynomial_terms, d, DifferentialEquation
+
+    @variables a, b, t, x(t), y(t), ω
+
+    @test is_polynomial(a * x^3 + b * d(x, t) * x^2 - a, [x])
+    @test is_polynomial(a * cos(ω * t) * x - b * x * y, [x, y])
+    @test is_polynomial(d(x, t, 2) + a * x / b, [x]) # variable-free denominator
+    @test is_polynomial(a + cos(ω * t), [x]) # no variable at all
+    @test is_polynomial(a * x^2.0, [x]) # integer-valued exponent of another type
+    @test all(n -> is_polynomial(a * x^n + b * d(x, t) * x^n, [x]), 0:12)
+
+    @test !is_polynomial(a * sin(x), [x])
+    @test !is_polynomial(a * exp(x + y), [x, y])
+    @test !is_polynomial(a / x, [x])
+    @test !is_polynomial(x^(-2), [x])
+    @test !is_polynomial(sqrt(x), [x])
+    @test !is_polynomial(a^x, [x])
+    @test !is_polynomial(d(sin(x), t), [x]) # hidden inside a derivative
+
+    # the offending terms are reported, the harmless ones are not
+    terms = nonpolynomial_terms(a * x^3 + a * sin(x) ~ b * cos(ω * t), [x])
+    @eqtest Num.(terms) == [sin(x)]
+
+    # a variable of another equation does not make a term non-polynomial
+    @test is_polynomial(sin(y) + x, [x])
+
+    dEOM = DifferentialEquation(
+        [d(x, t, 2) + x + a * x^3, d(y, t, 2) + y + a * sin(y)], [x, y]
+    )
+    @eqtest Num.(nonpolynomial_terms(dEOM)) == [sin(y)]
+    @test isempty(nonpolynomial_terms(DifferentialEquation([x + a * x^3, y], [x, y])))
+end
+
 @testset "fourier" begin
     using QuestBase: fourier_cos_term, fourier_sin_term
     using QuestBase.Symbolics: expand
