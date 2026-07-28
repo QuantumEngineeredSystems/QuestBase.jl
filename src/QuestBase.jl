@@ -19,7 +19,10 @@ using SymbolicUtils:
     add_with_div,
     is_literal_number,
     unwrap_const,
-    unwrap
+    unwrap,
+    vartype,
+    add_worker,
+    mul_worker
 
 using Symbolics:
     Symbolics,

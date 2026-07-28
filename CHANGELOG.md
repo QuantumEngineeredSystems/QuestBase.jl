@@ -5,6 +5,21 @@ All notable changes to QuestBase.jl will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `simplify_exp_products` left `exp(a)*exp(a)` alone. A product stores a repeated factor as a power, so the term arrives as the single factor `exp(a)^2` and the `isexp` test skipped it.
+- `collapse_pythagorean` took the first squared trig factor it found in a summand, so a summand carrying two of them, such as `cos(3t)^2*sin(t)^2*a`, failed to pair up with its partner. Every way of splitting a summand is now a candidate.
+- `declare_variable` bound its result inside `QuestBase` with `@eval`. Nothing read that binding, and evaluating into a closed module prevents a downstream package from precompiling a workload that declares variables.
+
+### Performance
+
+- `fraction_free_linear_solve` splits the system into the independent subsystems its sparsity pattern allows and eliminates each on its own. The coefficient matrix of an n-harmonic ansatz is n uncoupled 2x2 blocks; solved whole, every solution came out over the determinant of the full matrix. Over six representative systems `rearrange_standard` drops from 134.2 MiB to 10.1 MiB and from 0.114 s to 0.028 s.
+- Sums and products are rebuilt with SymbolicUtils' n-ary `add_worker`/`mul_worker` instead of being folded with `sum`/`prod`/`+=`, which is quadratic in the number of terms.
+- `trig_reduce` no longer calls `expand_all`. Its extra `Postwalk(expand_exp_power)` was the most expensive step of the averaging, and the following `simplify_exp_products` already normalises `exp(a)^n` at every node it reaches.
+- `is_rearranged` decides whether a derivative appears on the left-hand side by walking the expression tree rather than rendering both sides to strings.
+
 ## [0.5.0]
 
 ### Breaking

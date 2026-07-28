@@ -34,37 +34,43 @@ function _is_squared(x)
     return value isa Number && value == 2
 end
 
+const _TrigSplit = Tuple{Any,Any,Num}
+
 """
-Split a summand into `(cos-or-sin, argument, remaining factors)` when it carries a squared
-trig factor, `nothing` otherwise.
+Every way to read a summand as `(cos-or-sin, argument, remaining factors)` by pulling out one
+squared trig factor; empty when it carries none.
+
+A summand can hold more than one squared trig factor, as `cos(3θ)^2*sin(θ)^2*a` does, and
+only one of its splits pairs up with a partner elsewhere in the sum. Committing to the first
+factor found leaves `cos(3θ)^2*sin(θ)^2*a + sin(3θ)^2*sin(θ)^2*a` unpaired, so every split
+has to stay a candidate.
 """
-function _squared_trig_term(summand)
+function _squared_trig_terms(summand)
     if summand isa BasicSymbolic && ispow(summand)
         base, exponent = arguments(summand)
-        _is_squared(exponent) || return nothing
+        _is_squared(exponent) || return _TrigSplit[]
         trig = _trig_operation(base)
-        isnothing(trig) && return nothing
-        return trig[1], trig[2], Num(1)
+        isnothing(trig) && return _TrigSplit[]
+        return _TrigSplit[(trig[1], trig[2], Num(1))]
     elseif summand isa BasicSymbolic && ismul(summand)
-        trig = nothing
-        rest = Num(1)
-        for factor in arguments(summand)
-            if isnothing(trig) && factor isa BasicSymbolic && ispow(factor)
-                base, exponent = arguments(factor)
-                if _is_squared(exponent)
-                    candidate = _trig_operation(base)
-                    if !isnothing(candidate)
-                        trig = candidate
-                        continue
-                    end
-                end
+        factors = collect(arguments(summand))
+        splits = _TrigSplit[]
+        for (i, factor) in enumerate(factors)
+            (factor isa BasicSymbolic && ispow(factor)) || continue
+            base, exponent = arguments(factor)
+            _is_squared(exponent) || continue
+            trig = _trig_operation(base)
+            isnothing(trig) && continue
+
+            rest = Num(1)
+            for (j, other) in enumerate(factors)
+                j == i || (rest *= wrap(other))
             end
-            rest *= wrap(factor)
+            push!(splits, (trig[1], trig[2], rest))
         end
-        isnothing(trig) && return nothing
-        return trig[1], trig[2], rest
+        return splits
     end
-    return nothing
+    return _TrigSplit[]
 end
 
 "Pair up squared sines and cosines among the summands of a single `Add` node."
@@ -72,36 +78,40 @@ function _collapse_pythagorean_node(x)
     (x isa BasicSymbolic && isadd(x)) || return x
     summands = collect(arguments(x))
     length(summands) > 1 || return x
-    parts = map(_squared_trig_term, summands)
-    any(!isnothing, parts) || return x
+    parts = map(_squared_trig_terms, summands)
+    any(!isempty, parts) || return x
 
     taken = falses(length(summands))
-    result = Num(0)
+    # collected, not accumulated with `+=`: see `_apply_termwise`
+    kept = Any[]
     collapsed_any = false
     for i in eachindex(summands)
         taken[i] && continue
-        part = parts[i]
-        if !isnothing(part)
-            operation_i, argument_i, coefficient_i = part
+        matched = false
+        for (operation_i, argument_i, coefficient_i) in parts[i]
             partner_operation = operation_i === cos ? sin : cos
+            matches_partner(split) =
+                split[1] === partner_operation &&
+                isequal(split[2], argument_i) &&
+                isequal(split[3], coefficient_i)
             partner = findfirst(eachindex(summands)) do j
                 j == i && return false
                 taken[j] && return false
-                isnothing(parts[j]) && return false
-                return parts[j][1] === partner_operation &&
-                       isequal(parts[j][2], argument_i) &&
-                       isequal(parts[j][3], coefficient_i)
+                return any(matches_partner, parts[j])
             end
             if !isnothing(partner)
                 taken[i] = taken[partner] = true
-                result += coefficient_i
+                push!(kept, unwrap(coefficient_i))
                 collapsed_any = true
-                continue
+                matched = true
+                break
             end
         end
+        matched && continue
         taken[i] = true
-        result += wrap(summands[i])
+        push!(kept, summands[i])
     end
     collapsed_any || return x
-    return unwrap(result)
+    isempty(kept) && return unwrap(Num(0))
+    return length(kept) == 1 ? unwrap(Num(only(kept))) : add_worker(NUM_VARTYPE, kept)
 end
