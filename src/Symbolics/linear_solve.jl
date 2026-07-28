@@ -83,6 +83,10 @@ The coefficients are converted together into SymbolicUtils' sparse polynomial
 representation. Bareiss elimination then performs only exact polynomial divisions
 and produces one determinant denominator per solution, instead of the nested
 fractions produced by symbolic LU.
+
+The system is first split into independent subsystems (see [`_system_blocks`](@ref)) and each
+is eliminated on its own: for a harmonic ansatz that is `n` separate `2 × 2` solves instead
+of one `2n × 2n`.
 """
 function fraction_free_linear_solve(equations, variables)
     coefficients, offsets, islinear = Symbolics.linear_expansion(equations, variables)
@@ -92,7 +96,78 @@ function fraction_free_linear_solve(equations, variables)
     rows == columns == length(offsets) ||
         throw(DimensionMismatch("fraction-free linear solve requires a square system"))
 
-    return _bareiss_jordan_solve(coefficients, -offsets)
+    right_hand_side = -offsets
+    blocks = _system_blocks(coefficients)
+    isnothing(blocks) && return _bareiss_jordan_solve(coefficients, right_hand_side)
+
+    solution = Vector{Num}(undef, rows)
+    for (block_rows, block_columns) in blocks
+        solution[block_columns] = _bareiss_jordan_solve(
+            coefficients[block_rows, block_columns], right_hand_side[block_rows]
+        )
+    end
+    return solution
+end
+
+"Is `entry` zero on its face, so the row and column it joins are unrelated?"
+function _is_structural_zero(entry)
+    value = unwrap_const(unwrap(entry))
+    return value isa Number && iszero(value)
+end
+
+"""
+Split a system into the independent subsystems its sparsity pattern allows.
+
+The coefficient matrix of an `n`-harmonic ansatz is `n` uncoupled `2×2` blocks. Solving it
+whole is worse than wasteful: a Bareiss entry carries the determinant of everything
+eliminated so far, so the solution comes out over the determinant of the full matrix rather
+than the one block determinant that survives.
+
+Blocks are the connected components of the bipartite graph joining row `r` to column `c`
+where the coefficient is not [`_is_structural_zero`](@ref). Returns `(rows, columns)` index
+pairs, or `nothing` when there is one component or an unbalanced one (structurally
+singular, left to the full solve to reject).
+"""
+function _system_blocks(coefficients)
+    n = size(coefficients, 1)
+    # union-find over rows `1:n` and columns `n .+ (1:n)`
+    parent = collect(1:(2n))
+    function representative(index)
+        root = index
+        while parent[root] != root
+            root = parent[root]
+        end
+        while parent[index] != root  # path compression
+            parent[index], index = root, parent[index]
+        end
+        return root
+    end
+    for column in 1:n, row in 1:n
+        _is_structural_zero(coefficients[row, column]) && continue
+        row_root, column_root = representative(row), representative(n + column)
+        row_root == column_root || (parent[row_root] = column_root)
+    end
+
+    block_of_root = Dict{Int,Int}()
+    block_rows = Vector{Int}[]
+    for row in 1:n
+        block = get!(block_of_root, representative(row)) do
+            push!(block_rows, Int[])
+            return length(block_rows)
+        end
+        push!(block_rows[block], row)
+    end
+    length(block_rows) > 1 || return nothing
+
+    block_columns = [Int[] for _ in block_rows]
+    for column in 1:n
+        block = get(block_of_root, representative(n + column), 0)
+        iszero(block) && return nothing  # a column no row reaches: structurally singular
+        push!(block_columns[block], column)
+    end
+    all(length.(block_rows) .== length.(block_columns)) || return nothing
+
+    return collect(zip(block_rows, block_columns))
 end
 
 function _bareiss_jordan_solve(coefficients, right_hand_side)
@@ -217,19 +292,31 @@ _from_polynomial(value::Number, _) = Num(value)
 function _from_polynomial(variable::typeof(_BAREISS_VARIABLE), poly_to_symbolic)
     return Num(poly_to_symbolic[variable])
 end
+"""
+Rebuild a symbolic expression from a Bareiss polynomial.
+
+A solved entry carries thousands of monomials, so the sum and the per-monomial product go to
+`add_worker`/`mul_worker` whole rather than through `+=`/`*=`. See [`_apply_termwise`](@ref).
+"""
 function _from_polynomial(polynomial, poly_to_symbolic)
     variables = MP.variables(polynomial)
-    result = Num(0)
+    addends = Any[]
+    factors = Any[]
     for term in MP.terms(polynomial)
-        expression = Num(MP.coefficient(term))
+        empty!(factors)
+        push!(factors, MP.coefficient(term))
         exponents = MP.exponents(MP.monomial(term))
         for (variable, exponent) in zip(variables, exponents)
             iszero(exponent) && continue
-            expression *= Num(poly_to_symbolic[variable])^exponent
+            push!(factors, unwrap(poly_to_symbolic[variable])^exponent)
         end
-        result += expression
+        push!(
+            addends,
+            length(factors) == 1 ? only(factors) : mul_worker(NUM_VARTYPE, copy(factors)),
+        )
     end
-    return result
+    isempty(addends) && return Num(0)
+    return Num(length(addends) == 1 ? only(addends) : add_worker(NUM_VARTYPE, addends))
 end
 
 function _find_bareiss_pivot(augmented, pivot_index, n)

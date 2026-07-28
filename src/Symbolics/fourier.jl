@@ -25,7 +25,10 @@ function trig_reduce(x)
     x = add_div(x) # a/b + c/d = (ad + bc)/bd
     x = expand(x) # open all brackets
     x = trig_to_exp(x)
-    x = expand_all(x) # expand products of exponentials
+    # Not `expand_all`: its extra `Postwalk(expand_exp_power)` is the most expensive step of
+    # the averaging, and `simplify_exp_products` below already normalises `exp(a)^n` at every
+    # node it reaches.
+    x = expand(x) # expand products of exponentials
     x = simplify_exp_products(x) # simplify products of exps
     x = exp_to_trig(x)
     x = Num(simplify_complex(expand(x)))

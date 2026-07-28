@@ -16,7 +16,10 @@ function expand_fraction(x::BasicSymbolic)
         args = arguments(x)
         num = SymbolicUtils.expand(args[1])
         if isadd(num)
-            sum(expand_fraction(arg / args[2]) for arg in arguments(num))
+            add_worker(
+                vartype(typeof(x)),
+                map(arg -> expand_fraction(arg / args[2]), arguments(num)),
+            )
         else
             x
         end
@@ -26,12 +29,19 @@ function expand_fraction(x::BasicSymbolic)
 end
 expand_fraction(x::Num) = Num(expand_fraction(unwrap(x)))
 
-"Apply a function f on every member of a sum or a product"
+"The vartype every expression here is built on, for callers with no `BasicSymbolic` to read it off."
+const NUM_VARTYPE = vartype(fieldtype(Num, 1))
+
+"""
+Apply a function f on every member of a sum or a product.
+
+Rebuilt with `add_worker`/`mul_worker`; folding with `sum` is `O(n²)`.
+"""
 function _apply_termwise(f, x::BasicSymbolic)
     if isadd(x)
-        sum(f(arg) for arg in arguments(x))
+        add_worker(vartype(typeof(x)), map(f, arguments(x)))
     elseif ismul(x)
-        prod(f(arg) for arg in arguments(x))
+        mul_worker(vartype(typeof(x)), map(f, arguments(x)))
     elseif isdiv(x)
         args = arguments(x)
         _apply_termwise(f, args[1]) / _apply_termwise(f, args[2])
@@ -107,9 +117,9 @@ get_independent(x, t::Num) = x
 
 function get_independent(x::BasicSymbolic, t::Num)
     if isadd(x)
-        sum(get_independent(arg, t) for arg in arguments(x))
+        add_worker(vartype(typeof(x)), map(arg -> get_independent(arg, t), arguments(x)))
     elseif ismul(x)
-        prod(get_independent(arg, t) for arg in arguments(x))
+        mul_worker(vartype(typeof(x)), map(arg -> get_independent(arg, t), arguments(x)))
     elseif isdiv(x)
         args = arguments(x)
         !is_function(args[2], t) ? get_independent(args[1], t) / args[2] : 0
@@ -131,7 +141,14 @@ function get_all_terms(x::Equation)
 end
 function _get_all_terms(x::BasicSymbolic)
     if isadd(x)
-        vcat([_get_all_terms(arg) for arg in arguments(x)]...)
+        # not `vcat(parts...)`: splatting a runtime-length collection dispatches dynamically
+        terms = Any[]
+        for arg in arguments(x)
+            part = _get_all_terms(arg)
+            # the fallback method returns a bare non-symbolic, not a list of one
+            part isa AbstractVector ? append!(terms, part) : push!(terms, part)
+        end
+        terms
     elseif ismul(x)
         arguments(x)
     elseif isdiv(x)
@@ -162,6 +179,22 @@ is_harmonic(x, t) = is_harmonic(Num(x), Num(t))
 
 "Return true if `f` is a function of `var`."
 is_function(f, var) = unwrap(var) in get_variables(f)
+
+"""
+$(TYPEDSIGNATURES)
+
+Return true if `needle` occurs as a subexpression of `haystack`.
+
+Structural, not `occursin(string(needle), string(haystack))`: pretty-printing costs a full
+render and normalises, reorders and elides.
+"""
+occurs_in(needle, haystack) = _occurs_in(unwrap(needle), unwrap(haystack))
+
+function _occurs_in(target, expr)
+    isequal(expr, target) && return true
+    expr isa BasicSymbolic && SymbolicUtils.iscall(expr) || return false
+    return any(arg -> _occurs_in(target, arg), arguments(expr))
+end
 
 """
 $(TYPEDSIGNATURES)
