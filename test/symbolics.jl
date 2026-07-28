@@ -23,6 +23,15 @@ end
     @eqtest simplify_exp_products(exp(a) * exp(b)) == exp(a + b)
     @eqtest simplify_exp_products(exp(3a) * exp(4b)) == exp(3a + 4b)
     @eqtest simplify_exp_products(im * exp(3a) * exp(4b)) == im * exp(3a + 4b)
+
+    # a product stores a repeated factor as a power, so `exp(a)*exp(a)` never reaches the
+    # merge as two separate `exp` factors. It arrives as the single factor `exp(a)^2`.
+    @eqtest simplify_exp_products(exp(a) * exp(a)) == exp(2a)
+    @eqtest simplify_exp_products(b * exp(a) * exp(a)) == b * exp(2a)
+    @eqtest simplify_exp_products(exp(a)^2 * exp(b)) == exp(2a + b)
+    # and the exponents must cancel to nothing, as they do for two plain factors
+    @eqtest simplify_exp_products(exp(a)^2 * exp(-2a) * b) == b
+    @eqtest simplify_exp_products(exp(a)^2 * exp(-a)^2) == 1
 end
 
 @testset "euler" begin
@@ -236,6 +245,76 @@ end
         end
         rhs = rand(rng, -4:4, dimension)
         symbolic_variables = only(@variables q[1:dimension])
+        random_equations = [
+            sum(
+                matrix[row, column] * symbolic_variables[column] for column in 1:dimension
+            ) ~ rhs[row] for row in 1:dimension
+        ]
+        actual = fraction_free_linear_solve(random_equations, symbolic_variables)
+        expected = Rational{Int}.(matrix) \ Rational{Int}.(rhs)
+        for index in eachindex(actual)
+            @eqtest actual[index] == expected[index]
+        end
+    end
+end
+
+@testset "fraction-free linear solve splits independent blocks" begin
+    using LinearAlgebra
+    using QuestBase: fraction_free_linear_solve, _system_blocks
+
+    @variables a b c x y z w p q
+
+    # Two 2x2 blocks, interleaved so the decomposition cannot rely on contiguous indices.
+    # Each solution carries only its own block's determinant: solved whole, every one of
+    # them would come out over the product of both.
+    equations = [p * x + q * z ~ a, x - z ~ b, p * y + w ~ c, y - w ~ 0]
+    solution = fraction_free_linear_solve(equations, [x, y, z, w])
+    @eqtest solution[1] == (a + b * q) / (p + q)
+    @eqtest solution[3] == (a - b * p) / (p + q)
+    @eqtest solution[2] == c / (1 + p)
+    @eqtest solution[4] == c / (1 + p)
+
+    # Transcendental coefficients do not change the decomposition, and the trig-free block
+    # is not dragged through the rotation block's determinant.
+    trig = fraction_free_linear_solve(
+        [cos(p) * x - sin(p) * z ~ a, sin(p) * x + cos(p) * z ~ b, y ~ c], [x, y, z]
+    )
+    @eqtest trig[2] == c
+    # Put the rotation on a rational point of the unit circle so the residual is exact.
+    numeric = Dict(cos(p) => 3 // 5, sin(p) => 4 // 5, a => 1, b => 2)
+    @eqtest substitute(cos(p) * trig[1] - sin(p) * trig[3], numeric) == 1
+    @eqtest substitute(sin(p) * trig[1] + cos(p) * trig[3], numeric) == 2
+
+    # Whole matrix nonzero: one component, so there is nothing to split and the solve runs
+    # as before.
+    @test isnothing(_system_blocks(Num[1 1; 1 1]))
+
+    # A structurally singular pattern has an unbalanced component, and is left to the full
+    # solve to reject rather than being silently split.
+    @test isnothing(_system_blocks(Num[1 1; 0 0]))
+    @test_throws LinearAlgebra.SingularException fraction_free_linear_solve(
+        [x + y ~ a, 0 * x + 0 * y ~ b], [x, y]
+    )
+
+    # Random block-diagonal integer systems against exact rational arithmetic.
+    rng = Random.MersenneTwister(0xb10c)
+    for _ in 1:8
+        sizes = rand(rng, 1:3, 3)
+        dimension = sum(sizes)
+        matrix = zeros(Int, dimension, dimension)
+        offset = 0
+        for size in sizes
+            block = rand(rng, -4:4, size, size)
+            while iszero(det(block))
+                block = rand(rng, -4:4, size, size)
+            end
+            matrix[(offset + 1):(offset + size), (offset + 1):(offset + size)] = block
+            offset += size
+        end
+        permutation = Random.randperm(rng, dimension)
+        matrix = matrix[permutation, :]
+        rhs = rand(rng, -4:4, dimension)
+        symbolic_variables = only(@variables r[1:dimension])
         random_equations = [
             sum(
                 matrix[row, column] * symbolic_variables[column] for column in 1:dimension

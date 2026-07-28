@@ -1,12 +1,28 @@
 "Returns true if expr is an exponential"
 isexp(expr) = isterm(expr) && operation(expr) === exp
 
+"""
+The argument `a` of an exponential factor, reading `exp(a)` and `exp(a)^n` alike (the latter
+as `a*n`); `nothing` otherwise.
+
+A `Mul` stores repeated factors as a power, so `exp(a)*exp(a)` is held as `exp(a)^2` and a
+plain [`isexp`](@ref) test misses it.
+"""
+function _exp_argument(expr)
+    isexp(expr) && return arguments(expr)[1]
+    if expr isa BasicSymbolic && ispow(expr)
+        base, exponent = arguments(expr)
+        isexp(base) && return arguments(base)[1] * exponent
+    end
+    return nothing
+end
+
 "Expand powers of exponential such that exp(x)^n => exp(x*n)"
 function expand_exp_power(expr::BasicSymbolic)
     if isadd(expr)
-        sum(expand_exp_power(arg) for arg in arguments(expr))
+        add_worker(vartype(typeof(expr)), map(expand_exp_power, arguments(expr)))
     elseif ismul(expr)
-        prod(expand_exp_power(arg) for arg in arguments(expr))
+        mul_worker(vartype(typeof(expr)), map(expand_exp_power, arguments(expr)))
     elseif ispow(expr) && isexp(arguments(expr)[1])
         exp(arguments(arguments(expr)[1])[1] * arguments(expr)[2])
     else
@@ -26,7 +42,7 @@ function simplify_exp_products(expr::BasicSymbolic)
     elseif ismul(expr)
         _simplify_exp_products_mul(expr)
     elseif ispow(expr) && isexp(arguments(expr)[1])
-        # exp(x)^n => exp(x*n) — fixes bug where exp powers were left unexpanded
+        # exp(x)^n => exp(x*n), which is otherwise left unexpanded here
         exp(arguments(arguments(expr)[1])[1] * arguments(expr)[2])
     else
         expr
@@ -35,10 +51,12 @@ end
 
 function _simplify_exp_products_mul(expr)
     args = arguments(expr)
-    ind = findall(isexp, args)
+    exp_args = map(_exp_argument, args)
+    ind = findall(!isnothing, exp_args)
     rest_ind = setdiff(1:length(args), ind)
-    rest = isempty(rest_ind) ? 1 : prod(args[rest_ind])
-    total = isempty(ind) ? 0 : sum(arguments(args[i])[1] for i in ind)
+    vtype = vartype(typeof(expr))
+    rest = isempty(rest_ind) ? 1 : mul_worker(vtype, args[rest_ind])
+    total = isempty(ind) ? 0 : add_worker(vtype, exp_args[ind])
     if is_literal_number(total)
         iszero(unwrap_const(total)) && return rest
     end

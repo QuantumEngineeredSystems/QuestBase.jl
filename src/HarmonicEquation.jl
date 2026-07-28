@@ -236,8 +236,8 @@ function is_rearranged(eom::HarmonicEquation)
 
     HB_bool = isequal(rhs, dvar)
     hopf_bool = in("Hopf", getfield.(eom.variables, :type))
-    MF_bool =
-        !any([occursin(str1, str2) for str1 in string.(dvar) for str2 in string.(lhs)])
+    # no derivative anywhere on the left-hand side, asked of the tree rather than `string(lhs)`
+    MF_bool = !any(occurs_in(dv, l) for dv in dvar, l in lhs)
 
     # Hopf-containing equations or MF equation are arranged by construstion
     return HB_bool || hopf_bool || MF_bool
