@@ -165,8 +165,8 @@ linearises `x` into a sum of `coefficient * cos(kωt)` and `coefficient * sin(k�
 after one call every coefficient can be read straight off that sum.
 
 Falls back to `_fourier_term` per pair whenever the reduced expression is not linear in
-the trig atoms, so an input `trig_reduce` cannot fully linearise still gets the right
-answer, just at the old cost.
+the trig atoms or retains phase shifts in their arguments, so an input `trig_reduce`
+cannot fully normalise still gets the right answer, just at the old cost.
 """
 function fourier_terms(x::Equation, t, specs)
     lhs = fourier_terms(x.lhs, t, specs)
@@ -209,6 +209,10 @@ function _harmonic_buckets(x, t)
         length(trigs) == 1 || return nothing # product of harmonics, not linearised
         trig = only(trigs)
         ispow(unwrap(trig)) && return nothing # power of a harmonic, not linearised
+        # The bucket lookup matches only ±ω*t. A retained phase contributes to both
+        # sine and cosine coefficients, so use the general projection for that case.
+        arg = wrap(first(arguments(unwrap(trig))))
+        _vanishes(substitute_all(arg, t => 0)) || return nothing
         rest = Num(1)
         for factor in factors
             isequal(factor, trig) || (rest *= wrap(factor))
