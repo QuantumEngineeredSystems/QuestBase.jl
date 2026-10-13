@@ -9,13 +9,6 @@
     all_concrete(QuestBase.HarmonicVariable)
 end
 
-@testset "Code linting" begin
-    using JET
-    rep = report_package(QuestBase; target_modules=(QuestBase,))
-    @show rep
-    @test length(JET.get_reports(rep)) == 0
-end
-
 @testset "Code quality" begin
     using QuestBase
     using ExplicitImports, Aqua

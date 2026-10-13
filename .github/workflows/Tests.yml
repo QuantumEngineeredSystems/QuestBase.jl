@@ -40,8 +40,7 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - 'lts'
-          - '1'
+          - '1.13'
         os:
           - ubuntu-latest
         arch:
@@ -58,6 +57,8 @@ jobs:
       - uses: julia-actions/cache@v3
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
+        env:
+          GROUP: Core
       - uses: julia-actions/julia-processcoverage@v1
       - uses: codecov/codecov-action@v5
         with:
@@ -65,4 +66,24 @@ jobs:
           file: lcov.info
           name: codecov-umbrella
           fail_ci_if_error: false
-        if: ${{ matrix.version == 'lts' }}
+
+  jet:
+    name: JET - ubuntu-latest - x64
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.13'
+          arch: x64
+      - uses: julia-actions/cache@v3
+      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-runtest@v1
+        env:
+          GROUP: JET

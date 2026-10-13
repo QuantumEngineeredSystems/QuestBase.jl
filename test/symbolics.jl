@@ -195,6 +195,33 @@ end
     @eqtest fourier_cos_term((cos(f * t)^2 + cos(f * t))^3, 0, t) == 23//16
 end
 
+@testset "batched Fourier projection with phase shifts" begin
+    using QuestBase: fourier_terms, fourier_cos_term, fourier_sin_term
+    @variables ω t θ ψ F λ u v
+    specs = [(ω, cos), (ω, sin), (3 * ω, cos), (3 * ω, sin), (0, cos)]
+    drive = F * cos(ω * t + θ)
+    pump = λ * (u * cos(ω * t) + v * sin(ω * t)) * cos(2 * ω * t + ψ)
+
+    drive_coefficients = fourier_terms(drive, t, specs)
+    @eqtest drive_coefficients == [F * cos(θ), -F * sin(θ), 0, 0, 0]
+    pump_coefficients = fourier_terms(pump, t, specs)
+    @eqtest pump_coefficients[1] == expand(λ * (u * cos(ψ) - v * sin(ψ)) / 2)
+    @eqtest pump_coefficients[2] == expand(-λ * (u * sin(ψ) + v * cos(ψ)) / 2)
+
+    expression = drive + pump + 2
+    reference = [
+        if f === cos
+            fourier_cos_term(expression, frequency, t)
+        else
+            fourier_sin_term(expression, frequency, t)
+        end for (frequency, f) in specs
+    ]
+    @eqtest fourier_terms(expression, t, specs) == reference
+    equations = fourier_terms(expression ~ drive, t, specs)
+    @eqtest getfield.(equations, :lhs) == reference
+    @eqtest getfield.(equations, :rhs) == drive_coefficients
+end
+
 @testset "trig_reduce" begin
     using QuestBase: trig_reduce
 
