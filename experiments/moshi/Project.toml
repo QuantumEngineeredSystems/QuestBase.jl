@@ -12,7 +12,7 @@ Moshi = "0.3"
 QuestBase = "0.5.3"
 SymbolicUtils = "4"
 Symbolics = "7"
-Test = "1.13"
+Test = "1"
 julia = "~1.13"
 
 [sources]
