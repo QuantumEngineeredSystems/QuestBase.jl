@@ -110,6 +110,5 @@ end
 "Returns the symbols of a `HarmonicVariable`."
 Symbolics.get_variables(var::HarmonicVariable)::Num = Num(first(get_variables(var.symbol)))
 
-Base.isequal(v1::HarmonicVariable, v2::HarmonicVariable)::Bool = isequal(
-    v1.symbol, v2.symbol
-)
+Base.isequal(v1::HarmonicVariable, v2::HarmonicVariable)::Bool =
+    isequal(v1.symbol, v2.symbol)

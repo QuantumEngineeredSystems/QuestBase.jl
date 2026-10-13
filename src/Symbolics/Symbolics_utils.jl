@@ -10,49 +10,58 @@ end
 expand_all(x::Complex{Num}) = expand_all(x.re) + im * expand_all(x.im)
 
 function expand_fraction(x::BasicSymbolic)
-    @match x begin
-        BSImpl.AddMul() => _apply_termwise(expand_fraction, x)
-        BSImpl.Div(; num, den) => begin
-            # Expand the numerator only if it's not already a sum
-            # This is cheaper than full SymbolicUtils.expand for simple products
-            expanded = isadd(num) ? num : SymbolicUtils.expand(num)
-            if isadd(expanded)
-                sum(expand_fraction(arg / den) for arg in arguments(expanded))
-            else
-                x
-            end
+    if isadd(x) || ismul(x)
+        _apply_termwise(expand_fraction, x)
+    elseif isdiv(x)
+        args = arguments(x)
+        num = SymbolicUtils.expand(args[1])
+        if isadd(num)
+            add_worker(
+                vartype(typeof(x)),
+                map(arg -> expand_fraction(arg / args[2]), arguments(num)),
+            )
+        else
+            x
         end
-        _ => x
+    else
+        x
     end
 end
 expand_fraction(x::Num) = Num(expand_fraction(unwrap(x)))
 
-"Apply a function f on every member of a sum or a product"
+"The vartype every expression here is built on, for callers with no `BasicSymbolic` to read it off."
+const NUM_VARTYPE = vartype(fieldtype(Num, 1))
+
+"""
+Apply a function f on every member of a sum or a product.
+
+Rebuilt with `add_worker`/`mul_worker`; folding with `sum` is `O(n²)`.
+"""
 function _apply_termwise(f, x::BasicSymbolic)
-    @match x begin
-        BSImpl.AddMul(; variant) => if variant == AddMulVariant.ADD
-            sum(f(arg) for arg in arguments(x))
-        else  # MUL
-            prod(f(arg) for arg in arguments(x))
-        end
-        BSImpl.Div(; num, den) => _apply_termwise(f, num) / _apply_termwise(f, den)
-        _ => f(x)
+    if isadd(x)
+        add_worker(vartype(typeof(x)), map(f, arguments(x)))
+    elseif ismul(x)
+        mul_worker(vartype(typeof(x)), map(f, arguments(x)))
+    elseif isdiv(x)
+        args = arguments(x)
+        _apply_termwise(f, args[1]) / _apply_termwise(f, args[2])
+    else
+        f(x)
     end
 end
 
 simplify_complex(x::Complex) = isequal(x.im, 0) ? x.re : x.re + im * x.im
 simplify_complex(x) = x
 function simplify_complex(x::BasicSymbolic)
-    @match x begin
-        BSImpl.AddMul() => _apply_termwise(simplify_complex, x)
-        BSImpl.Div() => _apply_termwise(simplify_complex, x)
-        _ => begin
-            v = unwrap_const(x)
-            if v isa Complex && iszero(imag(v))
-                return real(v)
-            end
-            x
+    if isadd(x) || ismul(x) || isdiv(x)
+        _apply_termwise(simplify_complex, x)
+    else
+        # Handle Const-wrapped complex numbers with zero imaginary part
+        v = unwrap_const(x)
+        if v isa Complex && iszero(imag(v))
+            return real(v)
         end
+        x
     end
 end
 
@@ -64,8 +73,28 @@ Perform substitutions in `rules` on `x`.
 `Symbolics.substitute_in_deriv`.
 """
 Subtype = Union{Num,Equation,BasicSymbolic}
+
+# SymbolicUtils 4 / Symbolics 7: substitute() does not recurse into call arguments
+# (e.g. it leaves x(t) unchanged when substituting t => T). Walk the expression and
+# rewrite matching nodes ourselves.
+function _deep_substitute(e::BasicSymbolic, unwrap_rules::Dict)
+    # SU 4's default filter blocks recursion into the arguments of callable-symbolic
+    # terms (e.g. `x(t)`). Override with an always-true filter so substitutions like
+    # `t => T` reach inside `x(t)`. Compound keys still match before recursion, and
+    # SU does not re-walk the replacement, so self-referential rules don't loop.
+    return SymbolicUtils.substitute(e, unwrap_rules; filterer=_ -> true)
+end
+_deep_substitute(x::Num, ur::Dict) = wrap(_deep_substitute(unwrap(x), ur))
+function _deep_substitute(eq::Equation, ur::Dict)
+    return Equation(
+        _deep_substitute(unwrap(eq.lhs), ur), _deep_substitute(unwrap(eq.rhs), ur)
+    )
+end
+_deep_substitute(x, ::Dict) = x
+
 function substitute_all(x::Subtype, rules::Dict; include_derivatives=true)
-    result = substitute(x, rules)
+    unwrap_rules = Dict(unwrap(k) => unwrap(v) for (k, v) in rules)
+    result = _deep_substitute(x, unwrap_rules)
     if include_derivatives
         result = Symbolics.substitute_in_deriv(result, rules)
     end
@@ -87,20 +116,20 @@ get_independent(v::Vector{Num}, t::Num) = [get_independent(el, t) for el in v]
 get_independent(x, t::Num) = x
 
 function get_independent(x::BasicSymbolic, t::Num)
-    @match x begin
-        BSImpl.AddMul(; variant) => if variant == AddMulVariant.ADD
-            sum(get_independent(arg, t) for arg in arguments(x))
-        else  # MUL
-            prod(get_independent(arg, t) for arg in arguments(x))
-        end
-        BSImpl.Div(; num, den) => !is_function(den, t) ? get_independent(num, t) / den : 0
-        BSImpl.Term(; f, args) => if f === (^)
-            !is_function(args[1], t) && !is_function(args[2], t) ? x : 0
-        else
-            !is_function(x, t) ? x : 0
-        end
-        BSImpl.Sym() => !is_function(x, t) ? x : 0
-        _ => x
+    if isadd(x)
+        add_worker(vartype(typeof(x)), map(arg -> get_independent(arg, t), arguments(x)))
+    elseif ismul(x)
+        mul_worker(vartype(typeof(x)), map(arg -> get_independent(arg, t), arguments(x)))
+    elseif isdiv(x)
+        args = arguments(x)
+        !is_function(args[2], t) ? get_independent(args[1], t) / args[2] : 0
+    elseif ispow(x)
+        args = arguments(x)
+        !is_function(args[1], t) && !is_function(args[2], t) ? x : 0
+    elseif isterm(x) || issym(x)
+        !is_function(x, t) ? x : 0
+    else
+        x
     end
 end
 
@@ -111,14 +140,22 @@ function get_all_terms(x::Equation)
     return unique(cat(get_all_terms(Num(x.lhs)), get_all_terms(Num(x.rhs)); dims=1))
 end
 function _get_all_terms(x::BasicSymbolic)
-    @match x begin
-        BSImpl.AddMul(; variant) => if variant == AddMulVariant.ADD
-            vcat([_get_all_terms(arg) for arg in arguments(x)]...)
-        else  # MUL
-            arguments(x)
+    if isadd(x)
+        # not `vcat(parts...)`: splatting a runtime-length collection dispatches dynamically
+        terms = Any[]
+        for arg in arguments(x)
+            part = _get_all_terms(arg)
+            # the fallback method returns a bare non-symbolic, not a list of one
+            part isa AbstractVector ? append!(terms, part) : push!(terms, part)
         end
-        BSImpl.Div(; num, den) => [_get_all_terms(num)..., _get_all_terms(den)...]
-        _ => [x]
+        terms
+    elseif ismul(x)
+        arguments(x)
+    elseif isdiv(x)
+        args = arguments(x)
+        [_get_all_terms(args[1])..., _get_all_terms(args[2])...]
+    else
+        [x]
     end
 end
 _get_all_terms(x) = x
@@ -144,20 +181,100 @@ is_harmonic(x, t) = is_harmonic(Num(x), Num(t))
 is_function(f, var) = unwrap(var) in get_variables(f)
 
 """
+$(TYPEDSIGNATURES)
+
+Return true if `needle` occurs as a subexpression of `haystack`.
+
+Structural, not `occursin(string(needle), string(haystack))`: pretty-printing costs a full
+render and normalises, reorders and elides.
+"""
+occurs_in(needle, haystack) = _occurs_in(unwrap(needle), unwrap(haystack))
+
+function _occurs_in(target, expr)
+    isequal(expr, target) && return true
+    expr isa BasicSymbolic && SymbolicUtils.iscall(expr) || return false
+    return any(arg -> _occurs_in(target, arg), arguments(expr))
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Return the subexpressions of `x` in which a variable of `vars` (or a derivative of one)
+appears inside an operation other than an addition, a multiplication or a power with a
+non-negative integer exponent. An empty result means `x` is a polynomial in `vars`.
+
+Averaging replaces each variable by a truncated Fourier series and projects the result onto
+the harmonics of the ansatz. Only polynomials map a finite Fourier series onto a finite
+Fourier series, so terms such as `sin(x)`, `exp(x)` or `1/x` cannot be averaged and are
+returned here.
+"""
+function nonpolynomial_terms(x, vars)
+    unwrapped = vars isa AbstractVector ? unwrap.(vars) : [unwrap(vars)]
+    return unique(_collect_nonpolynomial!(BasicSymbolic[], unwrap(x), unwrapped))
+end
+function nonpolynomial_terms(eq::Equation, vars)
+    return unique(
+        cat(nonpolynomial_terms(eq.lhs, vars), nonpolynomial_terms(eq.rhs, vars); dims=1)
+    )
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Return true if `x` is a polynomial in `vars` and their derivatives, i.e. if it has no
+[`nonpolynomial_terms`](@ref).
+"""
+is_polynomial(x, vars) = isempty(nonpolynomial_terms(x, vars))
+
+"Return true if `x` is one of `vars` or contains one of them as a subexpression."
+_contains_variable(x, vars) = any(v -> isequal(x, v), vars)
+function _contains_variable(x::BasicSymbolic, vars)
+    any(v -> isequal(x, v), vars) && return true
+    SymbolicUtils.iscall(x) || return false
+    return any(arg -> _contains_variable(arg, vars), arguments(x))
+end
+
+"Walk `x` and push each subexpression which is not polynomial in `vars` onto `terms`."
+function _collect_nonpolynomial!(terms, x, vars)
+    # a subtree free of `vars` is a coefficient: any operation on it is allowed
+    _contains_variable(x, vars) || return terms
+    any(v -> isequal(x, v), vars) && return terms # a bare variable
+
+    if isadd(x) || ismul(x)
+        for arg in arguments(x)
+            _collect_nonpolynomial!(terms, arg, vars)
+        end
+    elseif ispow(x)
+        base, exponent = arguments(x)
+        power = unwrap_const(exponent)
+        if power isa Real && isinteger(power) && power >= 0
+            _collect_nonpolynomial!(terms, base, vars)
+        else # negative, fractional or symbolic exponent
+            push!(terms, x)
+        end
+    elseif isdiv(x)
+        numerator, denominator = arguments(x)
+        _collect_nonpolynomial!(terms, numerator, vars)
+        _contains_variable(denominator, vars) && push!(terms, x)
+    elseif is_derivative(x)
+        _collect_nonpolynomial!(terms, first(arguments(x)), vars)
+    else # a call such as sin, exp or log applied to something containing a variable
+        push!(terms, x)
+    end
+    return terms
+end
+
+"""
 Counts the number of derivatives of a symbolic variable.
 """
 function count_derivatives(x::BasicSymbolic)
-    @match x begin
-        BSImpl.Term() => begin
-            if is_derivative(x)
-                op = operation(x)
-                return op.order
-            else
-                return 0
-            end
-        end
-        BSImpl.Sym() => 0
-        _ => error("The input is not a single term or symbol")
+    (isterm(x) || issym(x)) || error("The input is not a single term or symbol")
+    if is_derivative(x)
+        # In Symbolics v7, Differential stores the order directly
+        op = operation(x)
+        return op.order
+    else
+        return 0
     end
 end
 count_derivatives(x::Num) = count_derivatives(unwrap(x))

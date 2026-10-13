@@ -4,22 +4,37 @@ function d(f::Num, x::Num, deg=1)::Num
 end
 d(funcs::Vector{Num}, x::Num, deg=1) = Num[d(f, x, deg) for f in funcs]
 
-"Declare a variable in the the currently active Module namespace"
-function declare_variable(name::String)
-    var_sym = Symbol(name)
-    @eval($(var_sym) = first(Symbolics.@variables $var_sym))
-    return eval(var_sym)
-end
+"""
+The symtype `Symbolics.@variables f(t)` gives its variable. Spelled out in full because
+`Symbolics.variable` needs a concrete type and `FnType{Tuple,Real}` is still a `UnionAll`.
+"""
+const _FnTypeReal = SymbolicUtils.FnType{Tuple,Real,Nothing}
+
+"""
+$(TYPEDSIGNATURES)
+
+Declare a symbolic variable named `name`.
+
+`Symbolics.@variables` needs the name as a literal, so names only known at runtime (`u1`,
+`v2`, the bracket-free copies [`_remove_brackets`](@ref) makes) have to go through
+`Symbolics.variable` instead.
+
+This used to build the variable with `@eval` and bind the result inside this module. Nothing
+ever read that binding, since it lands in `QuestBase` rather than in the caller's namespace,
+and evaluating into a closed module makes the package impossible to precompile with a
+workload: `@compile_workload` runs the very code that creates these variables.
+"""
+declare_variable(name::String) = Symbolics.variable(Symbol(name))
 
 declare_variable(x::Num) = declare_variable(string(x))
 
-"Declare a variable that is a function of another variable in the Module namespace"
+"""
+$(TYPEDSIGNATURES)
+
+Declare a variable named `name` that is a function of `independent_variable`.
+"""
 function declare_variable(name::String, independent_variable::Num)
-    # independent_variable = declare_variable(independent_variable) convert string into Num
-    var_sym = Symbol(name)
-    new_var = Symbolics.@variables $var_sym(independent_variable)
-    @eval($(var_sym) = first($new_var)) # store the variable under "name" in this namespace
-    return eval(var_sym)
+    return Symbolics.variable(Symbol(name); T=_FnTypeReal)(independent_variable)
 end
 
 "Return the name of a variable (excluding independent variables)"

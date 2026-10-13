@@ -65,7 +65,7 @@ mutable struct DifferentialEquation
     function DifferentialEquation(eq::Equation, vars::Vector{Num})
         typerhs = typeof(eq.rhs)
         typelhs = typeof(eq.lhs)
-        throw(
+        return throw(
             ArgumentError(
                 "The variables are of type $(typeof(vars)). Whereas you gave one equation of
                 type $(typerhs)~$(typelhs). Commenly one forgot to broadcast the equation symbol `~`.",
@@ -93,9 +93,8 @@ $(TYPEDSIGNATURES)
 
 Return the dependent variables of `diff_eom`.
 """
-Symbolics.get_variables(diff_eom::DifferentialEquation)::Vector{Num} = collect(
-    keys(diff_eom.equations)
-)
+Symbolics.get_variables(diff_eom::DifferentialEquation)::Vector{Num} =
+    collect(keys(diff_eom.equations))
 
 """
 $(TYPEDSIGNATURES)
@@ -104,9 +103,26 @@ Check if all equations in `diff_eom` are harmonic with respect to `t`. The funct
 differential equation system `diff_eom` and a variable `t`, and returns `true` if all equations
 are harmonic with respect to `t`, otherwise it returns `false`.
 """
-QuestBase.is_harmonic(diff_eom::DifferentialEquation, t::Num)::Bool = all([
-    is_harmonic(eq, t) for eq in values(diff_eom.equations)
-])
+QuestBase.is_harmonic(diff_eom::DifferentialEquation, t::Num)::Bool =
+    all([is_harmonic(eq, t) for eq in values(diff_eom.equations)])
+
+"""
+$(TYPEDSIGNATURES)
+
+Return the terms of `diff_eom` which are not polynomial in its variables, see
+[`nonpolynomial_terms`](@ref). An empty result means every equation is a polynomial in the
+variables and their derivatives, which averaging requires.
+"""
+function nonpolynomial_terms(diff_eom::DifferentialEquation)
+    vars = get_variables(diff_eom)
+    return unique(
+        reduce(
+            vcat,
+            [nonpolynomial_terms(eq, vars) for eq in values(diff_eom.equations)];
+            init=BasicSymbolic[],
+        ),
+    )
+end
 
 """
 $(TYPEDSIGNATURES)
@@ -184,9 +200,16 @@ the left-hand sides. Uses symbolic linear solving to determine the right-hand si
 the equations in place.
 """
 function rearrange!(eom::DifferentialEquation, new_lhs::Vector{Num})
-    soln = Symbolics.symbolic_linear_solve(
-        get_equations(eom), new_lhs; simplify=false, check=true
-    )
+    soln = try
+        fraction_free_linear_solve(get_equations(eom), new_lhs)
+    catch error
+        error isa BareissFailure || rethrow()
+        Num.(
+            Symbolics.symbolic_linear_solve(
+                get_equations(eom), new_lhs; simplify=false, check=true
+            ),
+        )
+    end
     # Use original variable keys (not extracted from new_lhs, as v7's get_variables
     # treats derivatives as variables)
     eom.equations = OrderedDict(zip(collect(keys(eom.equations)), new_lhs .~ soln))

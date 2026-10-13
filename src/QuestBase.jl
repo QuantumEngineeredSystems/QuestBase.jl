@@ -1,6 +1,8 @@
 module QuestBase
 
 using DocStringExtensions
+import DynamicPolynomials as DP
+import MultivariatePolynomials as MP
 using OrderedCollections: OrderedCollections, OrderedDict, OrderedSet
 using LinearAlgebra: LinearAlgebra
 
@@ -11,15 +13,16 @@ using SymbolicUtils:
     isterm,
     ispow,
     isadd,
+    isdiv,
+    ismul,
     issym,
     add_with_div,
     is_literal_number,
     unwrap_const,
     unwrap,
-    AddMulVariant
-
-using Moshi.Match: @match
-const BSImpl = SymbolicUtils.BasicSymbolicImpl
+    vartype,
+    add_worker,
+    mul_worker
 
 using Symbolics:
     Symbolics,
@@ -29,7 +32,6 @@ using Symbolics:
     Equation,
     Differential,
     arguments,
-    substitute,
     term,
     expand,
     operation,
@@ -41,8 +43,10 @@ using Symbolics:
 include("utils.jl")
 include("Symbolics/Symbolics_utils.jl")
 include("Symbolics/exponentials.jl")
+include("Symbolics/pythagorean.jl")
 include("Symbolics/fourier.jl")
 include("Symbolics/drop_powers.jl")
+include("Symbolics/linear_solve.jl")
 include("DifferentialEquation.jl")
 include("Variables.jl")
 include("HarmonicVariable.jl")
