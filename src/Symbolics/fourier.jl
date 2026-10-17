@@ -21,19 +21,19 @@ Check if the given expression `f` is a trigonometric function (sine or cosine).
 
 Returns `true` if `f` is either `sin` or `cos`, `false` otherwise.
 """
-function trig_reduce(x)
-    x = add_div(x) # a/b + c/d = (ad + bc)/bd
-    x = expand(x) # open all brackets
-    x = trig_to_exp(x)
+function trig_reduce(x::Num)
+    combined = expand(add_div(x)) # a/b + c/d = (ad + bc)/bd, then open all brackets
     # Not `expand_all`: its extra `Postwalk(expand_exp_power)` is the most expensive step of
     # the averaging, and `simplify_exp_products` below already normalises `exp(a)^n` at every
     # node it reaches.
-    x = expand(x) # expand products of exponentials
-    x = simplify_exp_products(x) # simplify products of exps
-    x = exp_to_trig(x)
-    x = Num(simplify_complex(expand(x)))
-    return reduce_denominator(x) # collapse trig identities left in the denominator
+    exponential = expand(trig_to_exp(combined)) # expand products of exponentials
+    # The exponential form carries complex constants, so the stretch from here to
+    # `simplify_complex` is untyped; it is confined to this one expression.
+    trigonometric = exp_to_trig(simplify_exp_products(exponential))
+    real = real_num(simplify_complex(expand(trigonometric)))
+    return reduce_denominator(real) # collapse trig identities left in the denominator
 end
+trig_reduce(x::SymbolicNode) = trig_reduce(Num(x))
 
 """
     reduce_denominator(x)
@@ -48,12 +48,12 @@ reaches the numerator, so identities such as the Pythagorean
 its own (it holds no nested fraction, so the recursion terminates) and leave the
 numerator untouched. Trig-free denominators are returned unchanged.
 """
-function reduce_denominator(x)
-    u = unwrap(x)
-    isdiv(u) || return x
-    num, den = arguments(u)
+reduce_denominator(x::Num) = Num(reduce_denominator(unwrap(x)))
+function reduce_denominator(x::SymbolicNode)
+    isdiv(x) || return x
+    num, den = arguments(x)
     contains_trig(den) || return x
-    return wrap(num) / trig_reduce(wrap(den))
+    return num / unwrap(trig_reduce(Num(den)))
 end
 
 "Return true if any subterm of `x` is a sin or cos."
@@ -80,7 +80,7 @@ end
 
 Combine fractions over a common denominator, `a/b + c/d = (ad + bc)/bd`.
 """
-add_div(x) = wrap(Postwalk(add_with_div)(unwrap(x)))
+add_div(x::Num) = Num(Postwalk(add_with_div)(unwrap(x)))
 
 """
     trig_to_exp(x::Num)

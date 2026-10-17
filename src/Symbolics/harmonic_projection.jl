@@ -14,11 +14,6 @@
 # that holds all of them exactly. `ProjectionProblem{R}` reads every constant into storage
 # of type `R`, and `project` then runs on concrete types throughout.
 
-const SymbolicNode = BasicSymbolic{NUM_VARTYPE}
-const SymbolicArguments = SymbolicUtils.ROArgsT{NUM_VARTYPE}
-const SYMBOLIC_ONE = Const{NUM_VARTYPE}(1)
-const SYMBOLIC_ZERO = Const{NUM_VARTYPE}(0)
-
 "The addends of a sum, or `x` itself."
 function summands_of(x::SymbolicNode)
     isadd(x) && return arguments(x)

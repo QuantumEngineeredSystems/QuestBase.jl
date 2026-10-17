@@ -32,6 +32,13 @@ expand_fraction(x::Num) = Num(expand_fraction(unwrap(x)))
 "The vartype every expression here is built on, for callers with no `BasicSymbolic` to read it off."
 const NUM_VARTYPE = vartype(fieldtype(Num, 1))
 
+"The concrete expression node every real-valued `Num` wraps."
+const SymbolicNode = BasicSymbolic{NUM_VARTYPE}
+const SymbolicArguments = SymbolicUtils.ROArgsT{NUM_VARTYPE}
+const SYMBOLIC_ONE = Const{NUM_VARTYPE}(1)
+const SYMBOLIC_ZERO = Const{NUM_VARTYPE}(0)
+const SYMBOLIC_TWO = Const{NUM_VARTYPE}(2)
+
 """
 Apply a function f on every member of a sum or a product.
 
@@ -49,6 +56,15 @@ function _apply_termwise(f, x::BasicSymbolic)
         f(x)
     end
 end
+
+"""
+Wrap a real-valued expression as a `Num`.
+
+Every method returns a `Num`, so a call on a value whose type inference cannot see, such as the
+output of [`simplify_complex`](@ref), still infers as `Num`. Calling `Num` directly does not.
+"""
+real_num(x::Real) = Num(x)
+real_num(x::SymbolicNode) = Num(x)
 
 simplify_complex(x::Complex) = isequal(x.im, 0) ? x.re : x.re + im * x.im
 simplify_complex(x) = x
