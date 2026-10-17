@@ -55,18 +55,17 @@ QuestBase.nonpolynomial_terms
 QuestBase.is_polynomial
 ```
 
-### Exponentials
-
-```@docs
-QuestBase.simplify_exp_products
-QuestBase.expand_exp_power
-```
-
 ### Trigonometrics
 
 ```@docs
 QuestBase.trig_reduce
 QuestBase.is_trig
-QuestBase.exp_to_trig
-QuestBase.trig_to_exp
+```
+
+### Fourier projection
+
+```@docs
+QuestBase.fourier_terms
+QuestBase.fourier_series
+QuestBase.FourierComponent
 ```

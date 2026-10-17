@@ -18,21 +18,46 @@ julia>drop_powers((x+y)^2 + (x+y)^3, [x,y], 3)
 x^2 + y^2 + 2*x*y
 ```
 """
-function drop_powers(expr::BasicSymbolic, vars::AbstractVector, deg::Int)
+function drop_powers(expr::SymbolicNode, vars::AbstractVector, deg::Int)
     deg >= 0 || throw(ArgumentError("deg must be nonnegative"))
-    raw_vars = unique(unwrap.(vars))
-    all(var -> var isa BasicSymbolic, raw_vars) ||
+    all(var -> unwrap(var) isa BasicSymbolic, vars) ||
         throw(ArgumentError("vars must contain symbolic expressions"))
-    iszero(deg) && return unwrap(Num(0))
-    ϵ = unwrap(Symbolics.variable(gensym(:degree)))
-    rules = Dict(var => ϵ * var for var in raw_vars)
-    scaled = Symbolics.expand(substitute_all(expr, rules; include_derivatives=false))
-    max_deg = max_power(scaled, ϵ)
-    removal = Dict(ϵ^d => 0 for d in deg:max_deg)
-    truncated = substitute_all(scaled, removal; include_derivatives=false)
-    return Symbolics.expand(
-        substitute_all(truncated, Dict(ϵ => 1); include_derivatives=false)
-    )
+    iszero(deg) && return SYMBOLIC_ZERO
+    raw_vars = unique(SymbolicNode[unwrap(var) for var in vars])
+    kept = SymbolicNode[]
+    for summand in summands_of(SymbolicUtils.expand(expr))
+        is_dropped(summand, raw_vars, deg) || push!(kept, summand)
+    end
+    return polynomial(kept)
+end
+
+"""
+Whether the expanded summand `x` has combined degree at least `deg` in `vars`. A fraction's
+degree is that of its numerator less that of its denominator. A summand holding a power of
+a variable that is not a number has no degree and is kept.
+"""
+function is_dropped(x::SymbolicNode, vars::Vector{SymbolicNode}, deg::Int)
+    num, den = numerator_denominator(x)
+    num_degree, num_determined = monomial_degree(num, vars)
+    den_degree, den_determined = monomial_degree(den, vars)
+    degree = num_degree - den_degree
+    return num_determined && den_determined && isinteger(degree) && degree >= deg
+end
+
+"""
+The combined degree in `vars` of the factors of `x`, and whether every power of a variable
+among them is a number. A factor that is not a power of a variable, such as `sin(x)` or a
+sum, has degree zero.
+"""
+function monomial_degree(x::SymbolicNode, vars::Vector{SymbolicNode})
+    degree = 0//1
+    for factor in factors_of(x)
+        base, exponent = base_exponent(factor)
+        any(var -> isequal(base, var), vars) || continue
+        isconst(exponent) || return degree, false
+        degree += with_const(Rational{Int}, exponent)
+    end
+    return degree, true
 end
 
 function drop_powers(expr::Num, vars::AbstractVector, deg::Int)
@@ -49,30 +74,23 @@ drop_powers(expr, var::Union{Num,BasicSymbolic}, deg::Int) = drop_powers(expr, [
 
 "Return the highest power of `y` occurring in the term `x`."
 function max_power(x::Num, y::Num)
-    terms = get_all_terms(x)
-    powers = power_of.(terms, y)
-    return maximum(powers)
+    return maximum(term -> power_of(term, y), get_all_terms(x))
 end
 
-max_power(x::Vector{Num}, y::Num) = maximum(max_power.(x, y))
-max_power(x::Complex, y::Num) = maximum(max_power.([x.re, x.im], y))
-max_power(x, t) = max_power(wrap(x), wrap(t))
+max_power(x::Vector{Num}, y::Num) = maximum(term -> max_power(term, y), x)
+max_power(x::Complex{Num}, y::Num) = max(max_power(x.re, y), max_power(x.im, y))
+max_power(x::SymbolicNode, y::SymbolicNode) = max_power(Num(x), Num(y))
 
-"Return the power of `y` in the term `x`"
+"Return the power of the symbol `y` in the term `x`."
 function power_of(x::Num, y::Num)
-    issym(unwrap(y)) ? nothing : error("power of " * string(y) * " is ambiguous")
+    issym(unwrap(y)) || throw(ArgumentError("The power of $y is ambiguous."))
     return power_of(unwrap(x), unwrap(y))
 end
 
-function power_of(x::BasicSymbolic, y::BasicSymbolic)
-    if ispow(x) && issym(y)
-        args = arguments(x)
-        return isequal(args[1], y) ? unwrap_const(args[2]) : 0
-    elseif issym(x) && issym(y)
-        return isequal(x, y) ? 1 : 0
-    else
-        return 0
-    end
+function power_of(x::SymbolicNode, y::SymbolicNode)
+    issym(y) || return 0//1
+    base, exponent = base_exponent(x)
+    isequal(base, y) || return 0//1
+    isconst(exponent) || throw(ArgumentError("The power of $y in $x is not a number."))
+    return with_const(Rational{Int}, exponent)
 end
-
-power_of(x, y) = 0

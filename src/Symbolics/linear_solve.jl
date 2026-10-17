@@ -166,48 +166,43 @@ RingAtoms() = RingAtoms(Dict{SymbolicNode,Int}(), SymbolicNode[])
 
 "Is the constant `value` an exact rational the coefficient field holds?"
 is_ring_coefficient(value::Union{Integer,Rational}) = true
-is_ring_coefficient(value) = false
+is_ring_coefficient(value::Number) = false
 
 "Is the constant `value` an exponent the polynomial ring can raise to?"
 is_ring_exponent(value::Integer) = value >= 0
-is_ring_exponent(value) = false
+is_ring_exponent(value::Number) = false
 
-"Is `x` a power the ring represents, rather than an atom?"
-function is_ring_power(x::SymbolicNode)
-    ispow(x) || return false
-    exponent = arguments(x)[2]
-    return isconst(exponent) && is_ring_exponent(unwrap_const(exponent))
+"Is the node `exponent` a constant the polynomial ring can raise to?"
+function is_ring_exponent(exponent::SymbolicNode)
+    return isconst(exponent) && with_const(is_ring_exponent, exponent)
 end
 
 "Is `x` a constant the ring represents, rather than an atom?"
-is_ring_constant(x::SymbolicNode) = isconst(x) && is_ring_coefficient(unwrap_const(x))
+is_ring_constant(x::SymbolicNode) = isconst(x) && with_const(is_ring_coefficient, x)
 
 "Record the atoms of `x` in `atoms`, in order of first appearance."
 function collect_atoms!(atoms::RingAtoms, x::SymbolicNode)
-    if is_ring_constant(x)
-        return atoms
-    elseif isadd(x) || ismul(x)
-        for argument in arguments(x)
+    is_ring_constant(x) && return atoms
+    @match x begin
+        BSImpl.AddMul(;) => for argument in arguments(x)
             collect_atoms!(atoms, argument)
         end
-        return atoms
-    elseif is_ring_power(x)
-        return collect_atoms!(atoms, arguments(x)[1])
-    end
-    get!(atoms.index, x) do
-        push!(atoms.atoms, x)
-        return length(atoms.atoms)
+        BSImpl.Term(; f, args) && if f === (^) && is_ring_exponent(args[2])
+        end => collect_atoms!(atoms, args[1])
+        _ => get!(atoms.index, x) do
+            push!(atoms.atoms, x)
+            return length(atoms.atoms)
+        end
     end
     return atoms
 end
 collect_atoms!(atoms::RingAtoms, x::Num) = collect_atoms!(atoms, unwrap(x))
 
-"`value` as an element of the coefficient field ``ℚ``."
-ring_coefficient(value::Integer) = QQ(value)
-ring_coefficient(value::Rational) = QQ(value)
+"The exact constant `x` as an element of the coefficient field ``ℚ``."
+ring_coefficient(x::SymbolicNode) = with_exact(QQ, x)
 
-"`value` as an exponent of the polynomial ring."
-ring_exponent(value::Integer) = Int(value)
+"The non-negative integer constant `x` as an exponent of the polynomial ring."
+ring_exponent(x::SymbolicNode) = with_exact(Int, x)
 
 """
 The polynomial ring a system is solved in, with one generator per atom of `atoms`.
@@ -229,26 +224,25 @@ function to_ring(
     atoms::RingAtoms,
     x::SymbolicNode,
 )
-    if is_ring_constant(x)
-        return ring(ring_coefficient(unwrap_const(x)))
-    elseif isadd(x)
-        total = zero(ring)
-        for argument in arguments(x)
-            total += to_ring(ring, generators, atoms, argument)
+    is_ring_constant(x) && return ring(ring_coefficient(x))
+    return @match x begin
+        BSImpl.AddMul(; variant) => if variant === AddMulVariant.ADD
+            total = zero(ring)
+            for argument in arguments(x)
+                total += to_ring(ring, generators, atoms, argument)
+            end
+            total
+        else
+            product = one(ring)
+            for argument in arguments(x)
+                product *= to_ring(ring, generators, atoms, argument)
+            end
+            product
         end
-        return total
-    elseif ismul(x)
-        product = one(ring)
-        for argument in arguments(x)
-            product *= to_ring(ring, generators, atoms, argument)
-        end
-        return product
-    elseif is_ring_power(x)
-        base, exponent = arguments(x)
-        power = ring_exponent(unwrap_const(exponent))
-        return to_ring(ring, generators, atoms, base)^power
+        BSImpl.Term(; f, args) && if f === (^) && is_ring_exponent(args[2])
+        end => to_ring(ring, generators, atoms, args[1])^ring_exponent(args[2])
+        _ => generators[atoms.index[x]]
     end
-    return generators[atoms.index[x]]
 end
 function to_ring(
     ring::QQMPolyRing, generators::Vector{QQMPolyRingElem}, atoms::RingAtoms, x::Num

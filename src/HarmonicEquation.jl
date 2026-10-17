@@ -155,9 +155,10 @@ end
 $(TYPEDSIGNATURES)
 Return the independent variables (typically time) of `eom`.
 """
-function get_independent_variables(eom::HarmonicEquation)::Vector{Num}
-    dynamic_vars = flatten(getfield.(eom.variables, Symbol("symbol")))
-    return flatten(unique([arguments(unwrap(var)) for var in dynamic_vars]))
+function get_independent_variables(eom::HarmonicEquation)
+    return unique(
+        Num[Num(arg) for hv in eom.variables for arg in arguments(unwrap(hv.symbol))]
+    )
 end
 
 _remove_brackets(var::Num) = declare_variable(var_name(var))
@@ -228,7 +229,7 @@ function is_rearranged(eom::HarmonicEquation)
     rhs = getfield.(eom.equations, :rhs)
 
     HB_bool = isequal(rhs, dvar)
-    hopf_bool = in("Hopf", getfield.(eom.variables, :type))
+    hopf_bool = any(hv -> hv.type == "Hopf", eom.variables)
     # no derivative anywhere on the left-hand side, asked of the tree rather than `string(lhs)`
     MF_bool = !any(occurs_in(dv, l) for dv in dvar, l in lhs)
 

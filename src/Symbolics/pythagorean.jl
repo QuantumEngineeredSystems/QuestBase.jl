@@ -34,13 +34,9 @@ partner_key(split::SquaredTrig) = (!split.iscos, split.argument, split.coefficie
 
 "Is `x` a cosine or sine raised to the literal power 2?"
 function is_squared_trig(x::SymbolicNode)
-    ispow(x) || return false
-    base, exponent = arguments(x)
-    # compared as a node: `unwrap_const` is untyped, and `isequal` matches 2, 2.0 and 2//1 alike
-    isequal(exponent, SYMBOLIC_TWO) || return false
-    isterm(base) || return false
-    op = operation(base)
-    return op === cos || op === sin
+    base, exponent = base_exponent(x)
+    # compared as a node, so that `isequal` matches 2, 2.0 and 2//1 alike
+    return isequal(exponent, SYMBOLIC_TWO) && is_trig_call(base)
 end
 
 "Append the reading of a bare `f(θ)^2` summand, with coefficient one."
@@ -92,8 +88,8 @@ expressions, so hashing the argument and coefficient is cheap. Summands are visi
 and each pairs with the earliest summand still free, which keeps the result deterministic.
 """
 function collapse_pythagorean_sum(x::SymbolicNode)
-    isadd(x) || return x
-    summands = arguments(x)
+    summands = summands_of(x)
+    length(summands) > 1 || return x
     splits = SquaredTrig[]
     for (index, summand) in enumerate(summands)
         append_squared_trigs!(splits, index, summand)

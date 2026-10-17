@@ -6,6 +6,7 @@ authors = ["Orjan Ameye <orjan.ameye@hotmail.com>", "Jan Kosata <kosataj@phys.et
 [deps]
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Moshi = "2e0e35c7-a2e4-4343-998d-7ef72827ed2d"
 Nemo = "2edaba10-b0f1-5616-af89-8c11ac63239a"
 OrderedCollections = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
 SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
@@ -14,6 +15,7 @@ Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 [compat]
 DocStringExtensions = "0.9.4"
 LinearAlgebra = "1.10"
+Moshi = "0.3"
 Nemo = "0.56, 0.57"
 OrderedCollections = "1.8, 2"
 SymbolicUtils = "4"

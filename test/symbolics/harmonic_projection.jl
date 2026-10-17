@@ -183,3 +183,18 @@ end
     @test_throws ArgumentError fourier_terms(cos(ω * t), t, [(ω, tan)])
     @test_throws ArgumentError fourier_terms(cos(ω * t), t, [(ω * t, cos)])
 end
+
+@testset "fourier_series returns every harmonic" begin
+    using QuestBase: fourier_series, fourier_terms
+    @variables ω t a b θ
+    x = (a * cos(ω * t) + b * sin(ω * t))^3 + 2 + a * cos(ω * t + θ)^2
+    series = fourier_series(x, t)
+    @eqtest getfield.(series, :frequency) == [0, ω, 2ω, 3ω]
+    for component in series
+        specs = [(component.frequency, cos), (component.frequency, sin)]
+        cosine, sine = fourier_terms(x, t, specs)
+        @eqtest component.cosine == cosine
+        isequal(component.frequency, 0) || @eqtest component.sine == sine
+    end
+    @test isempty(fourier_series(Num(0), t))
+end
