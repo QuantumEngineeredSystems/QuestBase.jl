@@ -33,13 +33,13 @@ using Symbolics:
     Differential,
     arguments,
     term,
-    expand,
     operation,
     expand_derivatives,
     is_derivative
 
 include("utils.jl")
 include("Symbolics/Symbolics_utils.jl")
+include("Symbolics/expansion.jl")
 include("Symbolics/pythagorean.jl")
 include("Symbolics/fourier.jl")
 include("Symbolics/harmonic_projection.jl")

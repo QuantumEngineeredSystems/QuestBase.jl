@@ -19,18 +19,24 @@ symbolic monomials. A trig factor that is not a positive integer power, such as
 `1/cos(a)`, is left as it stands.
 """
 function trig_reduce(x::Num)
-    series = fourier_series(reduce_denominators(x), LINEARIZATION_TIME)
+    terms = reduce_denominators!(expanded_terms(unwrap(x)))
+    series = expanded_fourier_series(terms, LINEARIZATION_TIME)
     isempty(series) && return Num(SYMBOLIC_ZERO)
     return only(series).cosine
 end
 trig_reduce(x::SymbolicNode) = trig_reduce(Num(x))
 
-"`x` with the denominator of every fraction among its summands put through `trig_reduce`."
-function reduce_denominators(x::Num)
-    summands = summands_of(unwrap(expand(x)))
-    any(summand -> contains_trig(last(numerator_denominator(summand))), summands) ||
-        return x
-    return Num(polynomial(SymbolicNode[reduce_denominator(s) for s in summands]))
+"The expanded `terms` with every denominator that contains a trig function reduced."
+function reduce_denominators!(terms::Vector{ExpandedTerm})
+    reduced = Dict{SymbolicNode,SymbolicNode}()
+    for (i, term) in enumerate(terms)
+        contains_trig(term.denominator) || continue
+        denominator = get!(reduced, term.denominator) do
+            return unwrap(trig_reduce(Num(term.denominator)))
+        end
+        terms[i] = ExpandedTerm(term.factors, denominator)
+    end
+    return terms
 end
 
 """
