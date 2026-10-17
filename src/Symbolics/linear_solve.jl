@@ -224,7 +224,10 @@ end
 
 "`x` as an element of `ring`, whose generators are those of `atoms`."
 function to_ring(
-    ring::QQMPolyRing, generators::Vector{QQMPolyRingElem}, atoms::RingAtoms, x::SymbolicNode
+    ring::QQMPolyRing,
+    generators::Vector{QQMPolyRingElem},
+    atoms::RingAtoms,
+    x::SymbolicNode,
 )
     if is_ring_constant(x)
         return ring(ring_coefficient(unwrap_const(x)))
@@ -338,8 +341,10 @@ function bareiss_jordan!(augmented::Matrix{QQMPolyRingElem})
             throw(LinearAlgebra.SingularException(pivot_index))
         if pivot_row != pivot_index
             for column in axes(augmented, 2)
-                augmented[pivot_index, column], augmented[pivot_row, column] =
-                    augmented[pivot_row, column], augmented[pivot_index, column]
+                augmented[pivot_index, column], augmented[pivot_row, column] = augmented[
+                    pivot_row, column
+                ],
+                augmented[pivot_index, column]
             end
         end
 

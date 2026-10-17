@@ -62,7 +62,9 @@ only one of its splits pairs up with a partner elsewhere in the sum. Committing 
 factor found leaves `cos(3θ)^2*sin(θ)^2*a + sin(3θ)^2*sin(θ)^2*a` unpaired, so every split
 has to stay a candidate.
 """
-function append_squared_trigs!(splits::Vector{SquaredTrig}, index::Int, summand::SymbolicNode)
+function append_squared_trigs!(
+    splits::Vector{SquaredTrig}, index::Int, summand::SymbolicNode
+)
     is_squared_trig(summand) && return push_squared_trig!(splits, index, summand)
     ismul(summand) || return splits
     factors = arguments(summand)
@@ -73,7 +75,9 @@ function append_squared_trigs!(splits::Vector{SquaredTrig}, index::Int, summand:
         coefficient = length(rest) == 1 ? only(rest) : mul_worker(NUM_VARTYPE, rest)
         push!(
             splits,
-            SquaredTrig(index, operation(base) === cos, first(arguments(base)), coefficient),
+            SquaredTrig(
+                index, operation(base) === cos, first(arguments(base)), coefficient
+            ),
         )
     end
     return splits
