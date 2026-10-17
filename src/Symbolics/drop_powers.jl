@@ -24,6 +24,8 @@ function drop_powers(expr::SymbolicNode, vars::AbstractVector, deg::Int)
         throw(ArgumentError("vars must contain symbolic expressions"))
     iszero(deg) && return SYMBOLIC_ZERO
     raw_vars = Set{SymbolicNode}(unwrap(var) for var in vars)
+    # no term can reach `deg`: skip the expansion, which costs far more than the bound
+    degree_bound(expr, raw_vars) < deg && return expr
     terms = expanded_terms(expr)
     kept = filter(term -> !is_dropped(term, raw_vars, deg), terms)
     # nothing to drop: `expr` already is the truncation, and rebuilding it costs a node per term
@@ -58,6 +60,49 @@ function monomial_degree(factors, vars::Set{SymbolicNode})
     end
     return degree, true
 end
+
+"""
+An upper bound on the degree in `vars` of every term of `expanded_terms(x)`, read off the
+structure of `x` without expanding it. A fraction whose denominator holds a variable has no
+bound, `1//0`.
+"""
+function degree_bound(x::SymbolicNode, vars::Set{SymbolicNode})
+    x in vars && return 1//1
+    return @match x begin
+        BSImpl.AddMul(; dict, variant) => if variant === AddMulVariant.ADD
+            maximum(summand -> degree_bound(summand, vars), keys(dict); init=0//1)
+        else
+            bound = 0//1
+            for (base, exponent) in dict
+                bound += power_degree_bound(base, exponent, vars)
+            end
+            bound
+        end
+        BSImpl.Div(; num, den) =>
+            contains_variable(den, vars) ? 1//0 : degree_bound(num, vars)
+        BSImpl.Term(; f, args) && if f === (^) && isconst(args[2])
+        end => power_degree_bound(args[1], unwrap_const(args[2]), vars)
+        _ => 0//1
+    end
+end
+
+"""
+An upper bound on the degree in `vars` of the terms of `base^exponent`. A power of a
+variable has the degree of its exponent and a negative one is a denominator, of degree at
+most zero. Expansion distributes only positive integer powers, so any other power of an
+expression is a single factor that is not a variable.
+"""
+function power_degree_bound(
+    base::SymbolicNode, @nospecialize(exponent), vars::Set{SymbolicNode}
+)
+    base in vars && return max(with_number(Rational{Int}, exponent), 0//1)
+    with_number(is_expanded_power, exponent) || return 0//1
+    return with_number(Rational{Int}, exponent) * degree_bound(base, vars)
+end
+
+"Return true if expansion distributes the power `value` over the terms of its base."
+is_expanded_power(value::Integer) = value > 0
+is_expanded_power(value::Number) = false
 
 function drop_powers(expr::Num, vars::AbstractVector, deg::Int)
     return Num(drop_powers(unwrap(expr), vars, deg))

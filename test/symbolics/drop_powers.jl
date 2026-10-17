@@ -58,3 +58,42 @@ end
     @variables epsilon ϵ
     @eqtest drop_powers(epsilon + ϵ^2 + a^3, a, 3) == epsilon + ϵ^2
 end
+
+@testset "degree bound" begin
+    # `drop_powers` skips the expansion when this bound is below the degree, so it must
+    # never fall below the degree of a term of the expansion
+    using QuestBase: degree_bound, expanded_terms, factors_of, monomial_degree
+    using Random: MersenneTwister
+
+    @variables a, b, c, T, k(T)
+    Dk = Differential(T)(k)
+    atoms = Num[a, b, c, Dk, k, Num(2), Num(1//3)]
+    function random_expression(rng, depth)
+        depth == 0 && return rand(rng, atoms)
+        branch = rand(rng, 1:8)
+        branch <= 3 &&
+            return random_expression(rng, depth - 1) + random_expression(rng, depth - 1)
+        branch <= 5 &&
+            return random_expression(rng, depth - 1) * random_expression(rng, depth - 1)
+        branch == 6 && return random_expression(rng, depth - 1)^rand(rng, [2, 3, -1, 1//2])
+        branch == 7 &&
+            return random_expression(rng, depth - 1) / rand(rng, [c, a + c, Num(3)])
+        return sin(random_expression(rng, depth - 1))
+    end
+    degree(factors, vars) = monomial_degree(factors, vars)
+
+    rng = MersenneTwister(0x5eed)
+    for _ in 1:400
+        expr = Symbolics.unwrap(random_expression(rng, rand(rng, 1:3)))
+        expr isa BasicSymbolic || continue
+        for vars in ([a], [a, b], [Dk], [a, Dk])
+            raw_vars = Set(Symbolics.unwrap.(vars))
+            bound = degree_bound(expr, raw_vars)
+            for term in expanded_terms(expr)
+                num, num_determined = degree(term.factors, raw_vars)
+                den, den_determined = degree(factors_of(term.denominator), raw_vars)
+                num_determined && den_determined && @test num - den <= bound
+            end
+        end
+    end
+end
