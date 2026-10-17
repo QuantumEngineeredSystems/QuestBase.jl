@@ -560,18 +560,59 @@ end
 function grouped_sum(groups::DenominatorGroups{R}) where {R}
     fractions = SymbolicNode[]
     for (denominator, weights) in groups
-        terms = SymbolicNode[
-            mul_worker(NUM_VARTYPE, SymbolicNode[symbolic_number(weight); rest; trig]) for
-            ((rest, trig), weight) in weights if !iszero(weight)
-        ]
-        isempty(terms) && continue
-        numerator = polynomial(terms)
+        numerator = weighted_sum(weights)
+        isequal(numerator, SYMBOLIC_ZERO) && continue
         push!(
             fractions,
             isequal(denominator, SYMBOLIC_ONE) ? numerator : numerator / denominator,
         )
     end
     return polynomial(fractions)
+end
+
+"""
+The sum `Σ weight * Π rest * trig` as one expression, built from its coefficient dictionary
+with `SymbolicUtils.Add` rather than by adding a node per term. Keys that name the same
+monomial, such as a phase factor kept in `rest` or in `trig`, have their weights summed.
+"""
+function weighted_sum(weights::TermWeights{R}) where {R}
+    monomials = Dict{SymbolicNode,R}()
+    for ((rest, trig), weight) in weights
+        iszero(weight) && continue
+        key = monomial_node(rest, trig)
+        monomials[key] = get(monomials, key, zero(R)) + weight
+    end
+    constant = get(monomials, SYMBOLIC_ONE, zero(R))
+    coefficients = Dict{SymbolicNode,Number}()
+    for (key, weight) in monomials
+        iszero(weight) ||
+            isequal(key, SYMBOLIC_ONE) ||
+            (coefficients[key] = number_value(weight))
+    end
+    return SymbolicUtils.Add{NUM_VARTYPE}(number_value(constant), coefficients; type=Real)
+end
+
+"The number `value` in the narrowest type that holds it, as SymbolicUtils stores constants."
+number_value(value::Real) = value
+number_value(value::Rational) = isone(denominator(value)) ? numerator(value) : value
+
+"""
+The monomial `Π rest * trig` with unit coefficient. Plain atoms go straight into the power
+dictionary of `SymbolicUtils.Mul`; a factor that is itself a power, such as `x^(1//2)`, has
+to merge its exponent with any other power of the same base, which `mul_worker` does.
+"""
+function monomial_node(rest::Vector{SymbolicNode}, trig::SymbolicNode)
+    factors = isequal(trig, SYMBOLIC_ONE) ? rest : SymbolicNode[rest; trig]
+    isempty(factors) && return SYMBOLIC_ONE
+    length(factors) == 1 && return only(factors)
+    any(factor -> !isequal(last(base_exponent(factor)), SYMBOLIC_ONE), factors) &&
+        return mul_worker(NUM_VARTYPE, copy(factors))
+    counts = Dict{SymbolicNode,Int}()
+    for factor in factors
+        counts[factor] = get(counts, factor, 0) + 1
+    end
+    powers = Dict{SymbolicNode,Number}(factor => count for (factor, count) in counts)
+    return SymbolicUtils.Mul{NUM_VARTYPE}(1, powers; type=Real)
 end
 
 "The coefficient of every target of `problem`."

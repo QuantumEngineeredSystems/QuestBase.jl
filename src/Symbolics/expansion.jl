@@ -44,25 +44,45 @@ end
 is_distributed_power(value::Integer) = value > 1
 is_distributed_power(value::Number) = false
 
+"Return true if the constant `value` is a negative integer, a power that is a denominator."
+is_inverse_power(value::Integer) = value < 0
+is_inverse_power(value::Number) = false
+
+"The integer power `value` as a count of repeated factors."
+repetitions(value::Integer) = Int(abs(value))
+repetitions(value::Number) = throw(ArgumentError("$value is not an integer power."))
+
+"The number `value` as a symbolic constant."
+constant_node(value::Number) = Const{NUM_VARTYPE}(value)
+
 """
     expanded_terms(x)
 
 The terms of `x` with every product and positive integer power of a sum distributed, and
 every fraction split over the terms of its numerator. Denominators are expanded on their
 own and kept whole. Arguments of function calls are left as they stand.
+
+Sums and products are read from their coefficient dictionaries rather than through
+`arguments`, which would build a node for every summand and power. A positive integer power
+of an atom enters as that many copies of the atom.
 """
 function expanded_terms(x::SymbolicNode)
     return @match x begin
-        BSImpl.AddMul(; variant) => if variant === AddMulVariant.ADD
+        BSImpl.AddMul(; coeff, dict, variant) => if variant === AddMulVariant.ADD
             terms = ExpandedTerm[]
-            for argument in arguments(x)
-                append!(terms, expanded_terms(argument))
+            with_number(iszero, coeff) ||
+                push!(terms, ExpandedTerm(with_number(constant_node, coeff)))
+            for (summand, weight) in dict
+                append_weighted!(terms, expanded_terms(summand), weight)
             end
             terms
         else
             terms = [ExpandedTerm(SymbolicNode[], SYMBOLIC_ONE)]
-            for argument in arguments(x)
-                terms = distribute(terms, expanded_terms(argument))
+            with_number(isone, coeff) || (
+                terms = distribute(terms, [ExpandedTerm(with_number(constant_node, coeff))])
+            )
+            for (base, exponent) in dict
+                terms = distribute(terms, power_terms(base, exponent))
             end
             terms
         end
@@ -74,19 +94,53 @@ function expanded_terms(x::SymbolicNode)
                 ) for term in expanded_terms(num)
             ]
         end
-        BSImpl.Term(; f, args) &&
-        if f === (^) && isconst(args[2]) && with_const(is_distributed_power, args[2])
-        end => begin
-            base = expanded_terms(args[1])
-            length(base) == 1 && return [ExpandedTerm(x)]
-            terms = base
-            for _ in 2:with_exact(Int, args[2])
-                terms = distribute(terms, base)
-            end
-            terms
-        end
+        BSImpl.Term(; f, args) && if f === (^) && isconst(args[2])
+        end => power_terms(args[1], unwrap_const(args[2]))
         _ => [ExpandedTerm(x)]
     end
+end
+
+"Append `terms`, each multiplied by the numeric `weight`, onto `destination`."
+function append_weighted!(
+    destination::Vector{ExpandedTerm}, terms::Vector{ExpandedTerm}, weight
+)
+    if with_number(isone, weight)
+        append!(destination, terms)
+    else
+        factor = with_number(constant_node, weight)
+        for term in terms
+            push!(
+                destination,
+                ExpandedTerm(push!(copy(term.factors), factor), term.denominator),
+            )
+        end
+    end
+    return destination
+end
+
+"The expanded terms of `base^exponent` for a numeric `exponent`."
+function power_terms(base::SymbolicNode, exponent)
+    with_number(isone, exponent) && return expanded_terms(base)
+    if with_number(is_inverse_power, exponent)
+        n = with_number(repetitions, exponent)
+        denominator = expanded_expression(power_terms(base, n))
+        return [ExpandedTerm(SymbolicNode[], denominator)]
+    end
+    with_number(is_distributed_power, exponent) ||
+        return [ExpandedTerm(base^with_number(constant_node, exponent))]
+    n = with_number(repetitions, exponent)
+    terms = expanded_terms(base)
+    if length(terms) == 1
+        term = only(terms)
+        isequal(term.denominator, SYMBOLIC_ONE) ||
+            return [ExpandedTerm(base^with_number(constant_node, exponent))]
+        return [ExpandedTerm(repeat(term.factors, n), SYMBOLIC_ONE)]
+    end
+    powers = terms
+    for _ in 2:n
+        powers = distribute(powers, terms)
+    end
+    return powers
 end
 
 "The term as an expression."

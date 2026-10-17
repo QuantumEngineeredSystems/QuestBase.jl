@@ -23,9 +23,12 @@ function drop_powers(expr::SymbolicNode, vars::AbstractVector, deg::Int)
     all(var -> unwrap(var) isa BasicSymbolic, vars) ||
         throw(ArgumentError("vars must contain symbolic expressions"))
     iszero(deg) && return SYMBOLIC_ZERO
-    raw_vars = unique(SymbolicNode[unwrap(var) for var in vars])
+    raw_vars = Set{SymbolicNode}(unwrap(var) for var in vars)
     terms = expanded_terms(expr)
-    return expanded_expression(filter!(term -> !is_dropped(term, raw_vars, deg), terms))
+    kept = filter(term -> !is_dropped(term, raw_vars, deg), terms)
+    # nothing to drop: `expr` already is the truncation, and rebuilding it costs a node per term
+    length(kept) == length(terms) && return expr
+    return expanded_expression(kept)
 end
 
 """
@@ -33,7 +36,7 @@ Whether the expanded `term` has combined degree at least `deg` in `vars`. A frac
 degree is that of its numerator less that of its denominator. A term holding a power of a
 variable that is not a number has no degree and is kept.
 """
-function is_dropped(term::ExpandedTerm, vars::Vector{SymbolicNode}, deg::Int)
+function is_dropped(term::ExpandedTerm, vars::Set{SymbolicNode}, deg::Int)
     num_degree, num_determined = monomial_degree(term.factors, vars)
     den_degree, den_determined = monomial_degree(factors_of(term.denominator), vars)
     degree = num_degree - den_degree
@@ -45,11 +48,11 @@ The combined degree in `vars` of `factors`, and whether every power of a variabl
 them is a number. A factor that is not a power of a variable, such as `sin(x)` or a sum,
 has degree zero.
 """
-function monomial_degree(factors, vars::Vector{SymbolicNode})
+function monomial_degree(factors, vars::Set{SymbolicNode})
     degree = 0//1
     for factor in factors
         base, exponent = base_exponent(factor)
-        any(var -> isequal(base, var), vars) || continue
+        base in vars || continue
         isconst(exponent) || return degree, false
         degree += with_const(Rational{Int}, exponent)
     end

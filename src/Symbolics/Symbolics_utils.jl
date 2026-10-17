@@ -52,33 +52,37 @@ end
 expand_fraction(x::Num) = Num(expand_fraction(unwrap(x)))
 
 """
-    with_const(f, x)
+    with_number(f, value)
 
-`f` applied to the payload of the constant `x` with its concrete type. SymbolicUtils stores
-the payload untyped; splitting it over the literal types here keeps every reader inferable.
+`f` applied to the number `value` with its concrete type. SymbolicUtils stores constants and
+the coefficients of sums and products untyped; splitting them over the literal types here
+keeps every reader inferable.
 """
-function with_const(f::F, x::SymbolicNode) where {F}
-    return @match unwrap_const(x) begin
-        value::Int => f(value)
-        value::Float64 => f(value)
-        value::Rational{Int} => f(value)
-        value::BigInt => f(value)
-        value::Rational{BigInt} => f(value)
-        value::BigFloat => f(value)
-        value::Float32 => f(value)
-        value::Bool => f(value)
-        value::Complex{Int} => f(value)
-        value::ComplexF64 => f(value)
-        value::Complex{Bool} => f(value)
-        value::Complex{Rational{Int}} => f(value)
-        value::Irrational{:π} => f(value)
-        value::Irrational{:ℯ} => f(value)
-        value::Irrational{:γ} => f(value)
-        value::Irrational{:φ} => f(value)
-        value::Irrational{:catalan} => f(value)
-        value => throw(ArgumentError("Unsupported constant $x of type $(typeof(value))."))
+function with_number(f::F, value) where {F}
+    return @match value begin
+        number::Int => f(number)
+        number::Float64 => f(number)
+        number::Rational{Int} => f(number)
+        number::BigInt => f(number)
+        number::Rational{BigInt} => f(number)
+        number::BigFloat => f(number)
+        number::Float32 => f(number)
+        number::Bool => f(number)
+        number::Complex{Int} => f(number)
+        number::ComplexF64 => f(number)
+        number::Complex{Bool} => f(number)
+        number::Complex{Rational{Int}} => f(number)
+        number::Irrational{:π} => f(number)
+        number::Irrational{:ℯ} => f(number)
+        number::Irrational{:γ} => f(number)
+        number::Irrational{:φ} => f(number)
+        number::Irrational{:catalan} => f(number)
+        _ => throw(ArgumentError("Unsupported constant $value of type $(typeof(value))."))
     end
 end
+
+"`f` applied to the payload of the constant `x` with its concrete type."
+with_const(f::F, x::SymbolicNode) where {F} = with_number(f, unwrap_const(x))
 
 "`f` applied to the payload of the constant `x`, which must be an exact rational."
 function with_exact(f::F, x::SymbolicNode) where {F}
