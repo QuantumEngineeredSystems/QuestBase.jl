@@ -70,6 +70,35 @@ end
     @eqtest drop_powers([a^2 + a + b, b], [a, b], 2) == [a + b, b]
 end
 
+@testset "powers of raw symbolic variables" begin
+    using QuestBase: drop_powers
+    using SymbolicUtils: unwrap
+    @variables a b
+    raw_a, raw_b = unwrap(a), unwrap(b)
+    expr = unwrap((a + b)^3)
+    expected = expand(3a^2 * b + 3a * b^2 + b^3)
+
+    result = drop_powers(expr, raw_a, 3)
+    @test result isa BasicSymbolic
+    @eqtest result == expected
+    @eqtest drop_powers(expr, [raw_a], 3) == expected
+    @test isequal(drop_powers(expr, [raw_a, raw_b], 3), unwrap(Num(0)))
+    @eqtest drop_powers([expr, raw_b], raw_a, 3) == [expected, b]
+    @eqtest drop_powers(a^3 + b, raw_a, 3) == b
+    @eqtest drop_powers(expr, a, 3) == expected
+    @test isequal(drop_powers(expr, [a, raw_b], 3), unwrap(Num(0)))
+
+    eq = drop_powers(a^3 + a ~ b, raw_a, 3)
+    @eqtest [eq.lhs, eq.rhs] == [a, b]
+    @test_throws ArgumentError drop_powers(expr, [1], 3)
+    @test_throws ArgumentError drop_powers(expr, raw_a, -1)
+    @test isequal(drop_powers(expr, raw_a, 0), unwrap(Num(0)))
+    @eqtest drop_powers(Num(7), a, 0) == 0
+
+    @variables epsilon ϵ
+    @eqtest drop_powers(epsilon + ϵ^2 + a^3, a, 3) == epsilon + ϵ^2
+end
+
 @testset "trig_to_exp and exp_to_trig" begin
     using QuestBase: expand_all, trig_to_exp, exp_to_trig
     @testset "Num" begin
