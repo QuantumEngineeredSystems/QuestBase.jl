@@ -158,15 +158,15 @@ Coefficients of `f(ω*t)` in `x` for every `(ω, f)` pair in `specs`, where each
 `cos` or `sin` and `ω == 0` selects the time-independent part.
 
 Equivalent to `[_fourier_term(x, ω, t, f) for (ω, f) in specs]` but expands `x` once
-instead of once per pair. Extracting one harmonic with [`_fourier_term`](@ref) costs a
-full exponential round trip (`trig_reduce`) of `x * f(ω*t)`, and an ansatz with `n`
-harmonics asks for `2n` of them from the same `x`. [`trig_reduce`](@ref) already
-linearises `x` into a sum of `coefficient * cos(kωt)` and `coefficient * sin(kωt)`, so
-after one call every coefficient can be read straight off that sum.
+instead of once per pair. When every trig argument is free of phases, the coefficients
+come from the exact exponential spectra of the expanded addends (`_spectral_terms`),
+without the symbolic exponential round trip of [`trig_reduce`](@ref).
 
-Falls back to `_fourier_term` per pair whenever the reduced expression is not linear in
-the trig atoms or retains phase shifts in their arguments, so an input `trig_reduce`
-cannot fully normalise still gets the right answer, just at the old cost.
+Otherwise [`trig_reduce`](@ref) linearises `x` once into a sum of
+`coefficient * cos(kωt)` and `coefficient * sin(kωt)`, and every coefficient is read off
+that sum. Falls back to `_fourier_term` per pair whenever the reduced expression is not
+linear in the trig atoms or retains phase shifts in their arguments, so an input
+`trig_reduce` cannot fully normalise still gets the right answer, just at the old cost.
 """
 function fourier_terms(x::Equation, t, specs)
     lhs = fourier_terms(x.lhs, t, specs)
@@ -175,6 +175,8 @@ function fourier_terms(x::Equation, t, specs)
 end
 
 function fourier_terms(x, t, specs)
+    spectral = _spectral_terms(x, t, specs)
+    isnothing(spectral) || return spectral
     buckets = _harmonic_buckets(trig_reduce(x), t)
     isnothing(buckets) && return [_fourier_term(x, ω, t, f) for (ω, f) in specs]
     dc, harmonics = buckets

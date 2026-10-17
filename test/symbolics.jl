@@ -251,6 +251,44 @@ end
     @eqtest getfield.(equations, :rhs) == drive_coefficients
 end
 
+@testset "spectral Fourier projection agrees with the exponential round trip" begin
+    using QuestBase: fourier_terms, fourier_cos_term, fourier_sin_term
+    @variables ω ν t a b c m
+    specs = [(ω, cos), (ω, sin), (2ω, cos), (2ω, sin), (3ω, cos), (3ω, sin), (0, cos)]
+    harmonic(k) = a * cos(k * ω * t) + b * sin(k * ω * t)
+    expressions = [
+        harmonic(1)^3,
+        harmonic(1)^5 + c * harmonic(1)^2,
+        harmonic(1) * harmonic(2) * harmonic(3),
+        0.3 * harmonic(1)^3 + 1.7 * harmonic(2),
+        sin(ω * t)^4 * cos(3ω * t) + 7,
+    ]
+    reference(expression) = [
+        if f === cos
+            fourier_cos_term(expression, k, t)
+        else
+            fourier_sin_term(expression, k, t)
+        end for (k, f) in specs
+    ]
+    for expression in expressions
+        @eqtest fourier_terms(expression, t, specs) == reference(expression)
+    end
+
+    # A t-free denominator is divided termwise, while the per-harmonic path keeps it
+    # common, so only the values agree.
+    fraction = (c * harmonic(1)^3 + harmonic(2)) / m
+    @test all(
+        iszero(simplify(p - q)) for
+        (p, q) in zip(fourier_terms(fraction, t, specs), reference(fraction))
+    )
+
+    # Incommensurate tones: products land on ω ± ν, never on ω alone.
+    two_tone = (a * cos(ω * t) + b * cos(ν * t))^3
+    tone_specs = [(ω, cos), (ν, cos), (ω + ν, cos), (2ω - ν, cos)]
+    @eqtest fourier_terms(two_tone, t, tone_specs) ==
+        [3//4 * a^3 + 3//2 * a * b^2, 3//2 * a^2 * b + 3//4 * b^3, 0, 3//4 * a^2 * b]
+end
+
 @testset "trig_reduce" begin
     using QuestBase: trig_reduce
 
