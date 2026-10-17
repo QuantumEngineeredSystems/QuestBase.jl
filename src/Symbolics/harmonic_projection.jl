@@ -552,7 +552,9 @@ end
 The numeric weight of every term `rest * trig` of one numerator. Like terms are summed here,
 in exact arithmetic, so each surviving term is built as an expression only once.
 """
-const TermWeights{R} = OrderedDict{Tuple{Vector{SymbolicNode},SymbolicNode},R}
+const TermWeights{R} = OrderedDict{
+    Tuple{Vector{SymbolicNode},SymbolicNode},Base.RefValue{R}
+}
 
 """
 The terms of one projected coefficient, grouped by the denominator of the addend they came
@@ -566,8 +568,8 @@ function push_term!(
 ) where {R}
     iszero(weight) && return groups
     weights = get!(TermWeights{R}, groups, addend.denominator)
-    key = (addend.rest, trig)
-    weights[key] = get(weights, key, zero(R)) + weight
+    total = get!(() -> Ref(zero(R)), weights, (addend.rest, trig))
+    total[] += weight
     return groups
 end
 
@@ -592,7 +594,8 @@ monomial, such as a phase factor kept in `rest` or in `trig`, have their weights
 """
 function weighted_sum(weights::TermWeights{R}) where {R}
     monomials = Dict{SymbolicNode,R}()
-    for ((rest, trig), weight) in weights
+    for ((rest, trig), total) in weights
+        weight = total[]
         iszero(weight) && continue
         key = monomial_node(rest, trig)
         monomials[key] = get(monomials, key, zero(R)) + weight
