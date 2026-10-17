@@ -102,7 +102,7 @@ end
 
 "Append `terms`, each multiplied by the numeric `weight`, onto `destination`."
 function append_weighted!(
-    destination::Vector{ExpandedTerm}, terms::Vector{ExpandedTerm}, weight
+    destination::Vector{ExpandedTerm}, terms::Vector{ExpandedTerm}, @nospecialize(weight)
 )
     if with_number(isone, weight)
         append!(destination, terms)
@@ -119,7 +119,7 @@ function append_weighted!(
 end
 
 "The expanded terms of `base^exponent` for a numeric `exponent`."
-function power_terms(base::SymbolicNode, exponent)
+function power_terms(base::SymbolicNode, @nospecialize(exponent))
     with_number(isone, exponent) && return expanded_terms(base)
     if with_number(is_inverse_power, exponent)
         n = with_number(repetitions, exponent)

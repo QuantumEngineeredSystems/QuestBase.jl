@@ -137,16 +137,36 @@ end
 
 Base.show(eom::HarmonicEquation) = show_fields(eom)
 
+"""
+$(TYPEDSIGNATURES)
+
+Return a copy of `eom` whose containers and variables are fresh, so mutating it leaves `eom`
+untouched. Symbolic expressions are immutable and shared; unlike `deepcopy`, this does not
+rebuild every expression tree.
+"""
+function Base.copy(eom::HarmonicEquation)
+    return HarmonicEquation(
+        copy(eom.equations),
+        map(copy, eom.variables),
+        copy(eom.parameters),
+        copy(eom.jacobian),
+        copy_source(eom.source_equations),
+    )
+end
+
+copy_source(source::DifferentialEquation) = copy(source)
+copy_source(source) = deepcopy(source)
+
 "Apply `rules` to both `equations` and `variables` field of `eom`"
 function substitute_all(eom::HarmonicEquation, rules::Union{Dict,Pair})::HarmonicEquation
-    new_eom = deepcopy(eom)
+    new_eom = copy(eom)
     new_eom.equations = expand_derivatives.(substitute_all(eom.equations, rules))
     return new_eom
 end
 
 #   Drop powers of `var` of degree >= `deg` from the equation set in `eom`.
 function drop_powers(eom::HarmonicEquation, terms::Vector{Num}, deg::Int)
-    new_eom = deepcopy(eom)
+    new_eom = copy(eom)
     new_eom.equations = drop_powers(eom.equations, terms, deg)
     return new_eom
 end
@@ -198,7 +218,7 @@ $(TYPEDSIGNATURES)
 
 Non-mutating version of [`rearrange!`](@ref).
 """
-rearrange(eom::HarmonicEquation, new_rhs::Vector{Num}) = rearrange!(deepcopy(eom), new_rhs)
+rearrange(eom::HarmonicEquation, new_rhs::Vector{Num}) = rearrange!(copy(eom), new_rhs)
 
 """
 $(TYPEDSIGNATURES)
@@ -216,7 +236,7 @@ $(TYPEDSIGNATURES)
 
 Non-mutating version of [`rearrange_standard!`](@ref).
 """
-rearrange_standard(eom::HarmonicEquation) = rearrange_standard!(deepcopy(eom))
+rearrange_standard(eom::HarmonicEquation) = rearrange_standard!(copy(eom))
 
 """
 $(TYPEDSIGNATURES)

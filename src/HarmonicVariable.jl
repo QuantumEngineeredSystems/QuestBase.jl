@@ -23,6 +23,11 @@ function HarmonicVariable(symbol::Num)
     return HarmonicVariable(symbol, "", "", Num(1), Num(0))
 end
 
+# The fields are immutable values; only the shell is fresh.
+function Base.copy(hv::HarmonicVariable)
+    return HarmonicVariable(hv.symbol, hv.name, hv.type, hv.ω, hv.natural_variable)
+end
+
 function Base.show(io::IO, hv::HarmonicVariable)
     if isempty(hv.type)
         s = "Harmonic variable " * string.(hv.symbol)

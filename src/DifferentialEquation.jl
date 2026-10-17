@@ -75,6 +75,16 @@ mutable struct DifferentialEquation
     DifferentialEquation(lhs::Num, var::Num) = DifferentialEquation([lhs ~ Int(0)], [var])
 end
 
+# Fresh containers around shared, immutable expressions.
+function Base.copy(diff_eq::DifferentialEquation)
+    new_eq = DifferentialEquation()
+    new_eq.equations = copy(diff_eq.equations)
+    new_eq.harmonics = OrderedDict{Num,OrderedSet{Num}}(
+        var => copy(harmonics) for (var, harmonics) in diff_eq.harmonics
+    )
+    return new_eq
+end
+
 "show method of the type `DifferentialEquation`"
 function Base.show(io::IO, diff_eq::DifferentialEquation)
     println(io, "System of ", length(keys(diff_eq.equations)), " differential equations")
@@ -198,7 +208,7 @@ $(TYPEDSIGNATURES)
 Non-mutating version of [`rearrange!`](@ref).
 """
 function rearrange(eom::DifferentialEquation, new_lhs::Vector{Num})
-    return rearrange!(deepcopy(eom), new_lhs)
+    return rearrange!(copy(eom), new_lhs)
 end
 
 """
@@ -220,7 +230,7 @@ $(TYPEDSIGNATURES)
 Non-mutating version of [`rearrange_standard!`](@ref).
 """
 function rearrange_standard(eom::DifferentialEquation, degree=2)
-    return rearrange_standard!(deepcopy(eom), degree)
+    return rearrange_standard!(copy(eom), degree)
 end
 
 function get_variables_nums(vars::Vector{Num})

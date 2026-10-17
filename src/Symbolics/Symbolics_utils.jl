@@ -58,7 +58,7 @@ expand_fraction(x::Num) = Num(expand_fraction(unwrap(x)))
 the coefficients of sums and products untyped; splitting them over the literal types here
 keeps every reader inferable.
 """
-function with_number(f::F, value) where {F}
+function with_number(f::F, @nospecialize(value)) where {F}
     return @match value begin
         number::Int => f(number)
         number::Float64 => f(number)

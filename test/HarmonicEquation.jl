@@ -92,6 +92,25 @@ end
     @test !isequal(subbed.equations, heq.equations)
 end
 
+@testset "copy" begin
+    heq = HarmonicEquation([eq1, eq2], [hv1, hv2], nat_eq)
+    copied = copy(heq)
+    @eqtest copied.equations == heq.equations
+    @test isequal(get_variables(copied), get_variables(heq))
+
+    # mutating the copy leaves the original untouched
+    copied.equations[1] = D(u) ~ 0
+    copied.variables[1].name = "changed"
+    push!(copied.parameters, Num(0))
+    copied.jacobian[1, 1] = Num(0)
+    QuestBase.add_harmonic!(source(copied), x, T)
+    @eqtest heq.equations[1] == eq1
+    @test heq.variables[1].name == "test"
+    @test length(heq.parameters) == length(copied.parameters) - 1
+    @test !isequal(heq.jacobian[1, 1], 0)
+    @test !any(h -> isequal(h, T), source(heq).harmonics[x])
+end
+
 @testset "Utility functions" begin
     heq = HarmonicEquation([eq1, eq2], [hv1, hv2], nat_eq)
 
