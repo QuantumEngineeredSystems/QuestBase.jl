@@ -2,7 +2,7 @@ using Test
 using Symbolics
 using SymbolicUtils: Fixpoint, Prewalk, PassThrough, BasicSymbolic
 
-using QuestBase: @eqtest
+using QuestBase: QuestBase, @eqtest
 
 @testset "exp(x)^n => exp(x*n)" begin
     using QuestBase: expand_all, expand_exp_power
