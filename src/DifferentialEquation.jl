@@ -36,7 +36,6 @@ mutable struct DifferentialEquation
         return new(OrderedDict{Num,Equation}(), OrderedDict{Num,OrderedSet{Num}}())
     end
 
-    # uses the above constructor if no harmonics defined
     function DifferentialEquation(eqs::Vector{Equation}, vars::Vector{Num})
         if length(eqs) != length(vars)
             throw(ArgumentError("The number of equations and variables are not the same."))
@@ -44,7 +43,6 @@ mutable struct DifferentialEquation
         return DifferentialEquation(OrderedDict(zip(vars, eqs)))
     end
 
-    # if expressions are entered instead of equations, automatically set them = 0
     function DifferentialEquation(exprs::Vector{Num}, vars::Vector{Num})
         return DifferentialEquation(exprs .~ Int(0), vars)
     end
@@ -75,7 +73,6 @@ mutable struct DifferentialEquation
     DifferentialEquation(lhs::Num, var::Num) = DifferentialEquation([lhs ~ Int(0)], [var])
 end
 
-# Fresh containers around shared, immutable expressions.
 function Base.copy(diff_eq::DifferentialEquation)
     new_eq = DifferentialEquation()
     new_eq.equations = copy(diff_eq.equations)
@@ -196,8 +193,6 @@ left-hand sides. Modifies `eom` in place and returns it.
 """
 function rearrange!(eom::DifferentialEquation, new_lhs::Vector{Num})
     soln = solve_linear_system(get_equations(eom), new_lhs)
-    # Use original variable keys (not extracted from new_lhs, as v7's get_variables
-    # treats derivatives as variables)
     eom.equations = OrderedDict(zip(collect(keys(eom.equations)), new_lhs .~ soln))
     return eom
 end
@@ -235,4 +230,4 @@ end
 
 function get_variables_nums(vars::Vector{Num})
     return unique(flatten([Num.(get_variables(x)) for x in vars]))
-end # TODO: remove this function or at least better names
+end

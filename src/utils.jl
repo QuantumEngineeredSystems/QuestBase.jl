@@ -5,7 +5,7 @@ flatten(a) = collect(Iterators.flatten(a))
 
 "Show fields of an object."
 function show_fields(object)
-    for field in fieldnames(typeof(object)) # display every field
+    for field in fieldnames(typeof(object))
         display(string(field))
         display(getfield(object, field))
     end

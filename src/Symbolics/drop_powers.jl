@@ -24,11 +24,9 @@ function drop_powers(expr::SymbolicNode, vars::AbstractVector, deg::Int)
         throw(ArgumentError("vars must contain symbolic expressions"))
     iszero(deg) && return SYMBOLIC_ZERO
     raw_vars = Set{SymbolicNode}(unwrap(var) for var in vars)
-    # no term can reach `deg`: skip the expansion, which costs far more than the bound
     degree_bound(expr, raw_vars) < deg && return expr
     terms = expanded_terms(expr)
     kept = filter(term -> !is_dropped(term, raw_vars, deg), terms)
-    # nothing to drop: `expr` already is the truncation, and rebuilding it costs a node per term
     length(kept) == length(terms) && return expr
     return expanded_expression(kept)
 end

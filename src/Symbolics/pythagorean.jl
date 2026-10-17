@@ -35,7 +35,6 @@ partner_key(split::SquaredTrig) = (!split.iscos, split.argument, split.coefficie
 "Is `x` a cosine or sine raised to the literal power 2?"
 function is_squared_trig(x::SymbolicNode)
     base, exponent = base_exponent(x)
-    # compared as a node, so that `isequal` matches 2, 2.0 and 2//1 alike
     return isequal(exponent, SYMBOLIC_TWO) && is_trig_call(base)
 end
 
@@ -102,12 +101,10 @@ function collapse_pythagorean_sum(x::SymbolicNode)
     end
 
     taken = falses(length(summands))
-    # collected, not accumulated with `+=`: see `_apply_termwise`
     kept = SymbolicNode[]
     collapsed_any = false
     next_split = 1
     for index in eachindex(summands)
-        # splits are appended in summand order, so those of `index` are contiguous
         first_split = next_split
         while next_split <= length(splits) && splits[next_split].summand == index
             next_split += 1

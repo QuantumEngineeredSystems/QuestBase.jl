@@ -1,10 +1,3 @@
-# Distributive expansion into plain data.
-#
-# `SymbolicUtils.expand` builds a hash-consed node for every partial product, and those
-# constructions, not the arithmetic, are what it spends its time on. Here products and
-# powers of sums are distributed into `ExpandedTerm`s, which hold their factors in a vector,
-# so no node is built until a caller asks for one. The Fourier projection and `drop_powers`
-# read the terms directly and build nodes only for the terms they return.
 
 """
 One term `Π factors / denominator` of an expanded expression. No factor is a sum or a

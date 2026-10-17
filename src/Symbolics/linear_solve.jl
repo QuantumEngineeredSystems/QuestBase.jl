@@ -107,7 +107,6 @@ to the elimination to reject), is returned whole as a single block.
 function system_blocks(coefficients::AbstractMatrix)
     n = size(coefficients, 1)
     whole = [(collect(1:n), collect(1:n))]
-    # union-find over rows `1:n` and columns `n .+ (1:n)`
     parent = collect(1:(2n))
     for column in 1:n, row in 1:n
         is_structural_zero(coefficients[row, column]) && continue
@@ -130,7 +129,7 @@ function system_blocks(coefficients::AbstractMatrix)
     block_columns = [Int[] for _ in block_rows]
     for column in 1:n
         block = get(block_of_root, union_find_root!(parent, n + column), 0)
-        iszero(block) && return whole  # a column no row reaches: structurally singular
+        iszero(block) && return whole
         push!(block_columns[block], column)
     end
     all(length.(block_rows) .== length.(block_columns)) || return whole

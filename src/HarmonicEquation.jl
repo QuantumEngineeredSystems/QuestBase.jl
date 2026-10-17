@@ -25,7 +25,6 @@ mutable struct HarmonicEquation{T}
     "The system of equations of motion the harmonic equations were derived from."
     source_equations::T
 
-    # use a self-referential constructor with _parameters
     function HarmonicEquation(
         equations::Vector{Equation},
         variables::Vector{HarmonicVariable},
@@ -99,7 +98,6 @@ function _parameters(eom::HarmonicEquation)
             is_derivative(v) || push!(all_symbols, Num(v))
         end
     end
-    # subtract the set of independent variables (i.e., time) from all free symbols
     return unique(setdiff(all_symbols, get_variables(eom), get_independent_variables(eom)))
 end
 
@@ -125,7 +123,6 @@ function _show_ansatz(eom::HarmonicEquation)
     output = ""
     vars = unique(getfield.(eom.variables, :natural_variable))
     for nat_var in vars
-        # the Hopf variable (limit cycle frequency) does not contribute a term
         harm_vars = filter(
             x -> isequal(nat_var, x.natural_variable) && x.type !== "Hopf", eom.variables
         )
@@ -164,7 +161,6 @@ function substitute_all(eom::HarmonicEquation, rules::Union{Dict,Pair})::Harmoni
     return new_eom
 end
 
-#   Drop powers of `var` of degree >= `deg` from the equation set in `eom`.
 function drop_powers(eom::HarmonicEquation, terms::Vector{Num}, deg::Int)
     new_eom = copy(eom)
     new_eom.equations = drop_powers(eom.equations, terms, deg)
@@ -250,10 +246,8 @@ function is_rearranged(eom::HarmonicEquation)
 
     HB_bool = isequal(rhs, dvar)
     hopf_bool = any(hv -> hv.type == "Hopf", eom.variables)
-    # no derivative anywhere on the left-hand side, asked of the tree rather than `string(lhs)`
     MF_bool = !any(occurs_in(dv, l) for dv in dvar, l in lhs)
 
-    # Hopf-containing equations or MF equation are arranged by construstion
     return HB_bool || hopf_bool || MF_bool
 end
 
@@ -266,4 +260,3 @@ function declare_variables(eom::HarmonicEquation)
     vars_orig = get_variables(eom)
     return declare_variable.(var_name.(vars_orig))
 end
-# TODO should this be the variable with independent_variable or without independent_variable?

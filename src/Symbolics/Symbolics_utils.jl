@@ -143,14 +143,7 @@ Perform substitutions in `rules` on `x`.
 """
 Subtype = Union{Num,Equation,BasicSymbolic}
 
-# SymbolicUtils 4 / Symbolics 7: substitute() does not recurse into call arguments
-# (e.g. it leaves x(t) unchanged when substituting t => T). Walk the expression and
-# rewrite matching nodes ourselves.
 function _deep_substitute(e::BasicSymbolic, unwrap_rules::Dict)
-    # SU 4's default filter blocks recursion into the arguments of callable-symbolic
-    # terms (e.g. `x(t)`). Override with an always-true filter so substitutions like
-    # `t => T` reach inside `x(t)`. Compound keys still match before recursion, and
-    # SU does not re-walk the replacement, so self-referential rules don't loop.
     return SymbolicUtils.substitute(e, unwrap_rules; filterer=_ -> true)
 end
 _deep_substitute(x::Num, ur::Dict) = wrap(_deep_substitute(unwrap(x), ur))
@@ -289,9 +282,8 @@ end
 
 "Walk `x` and push each subexpression which is not polynomial in `vars` onto `terms`."
 function collect_nonpolynomial!(terms, x, vars)
-    # a subtree free of `vars` is a coefficient: any operation on it is allowed
     contains_variable(x, vars) || return terms
-    any(v -> isequal(x, v), vars) && return terms # a bare variable
+    any(v -> isequal(x, v), vars) && return terms
 
     @match x begin
         BSImpl.AddMul(;) => for arg in arguments(x)
@@ -305,12 +297,12 @@ function collect_nonpolynomial!(terms, x, vars)
             base, exponent = args
             if isconst(exponent) && with_const(is_natural_exponent, exponent)
                 collect_nonpolynomial!(terms, base, vars)
-            else # negative, fractional or symbolic exponent
+            else
                 push!(terms, x)
             end
         elseif f isa Differential
             collect_nonpolynomial!(terms, first(args), vars)
-        else # a call such as sin, exp or log applied to something containing a variable
+        else
             push!(terms, x)
         end
         _ => push!(terms, x)

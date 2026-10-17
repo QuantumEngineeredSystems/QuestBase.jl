@@ -1,18 +1,3 @@
-# Fourier projection of expressions polynomial in cos and sin of arguments linear in time.
-#
-# After `expand`, every addend of `x` reads `c * m * Π_j f_j(ν_j t + φ_j)^p_j / d`, where
-# `m`, `d` and the frequencies `ν_j` and phases `φ_j` are free of `t`, `f_j` is `cos` or
-# `sin`, and `p_j` is a positive integer. With `cos(a) = (e^{ia} + e^{-ia})/2` and
-# `sin(a) = (-i e^{ia} + i e^{-ia})/2`, the trig part is a finite sum `Σ w e^{i(ν t + φ)}`
-# with numeric weights `w`. The coefficients of `cos(ωt)` and `sin(ωt)` come from the terms
-# with `ν = ±ω`, and each phase contributes `cos(φ)` and `sin(φ)` factors. Addends that
-# share a trig part share its spectrum, which is therefore built once.
-#
-# `scan_projection` walks the expanded expression once, checks that it has this form and
-# records its structure. Numeric constants stay symbolic during the scan, because
-# SymbolicUtils stores their values untyped; the scan only determines the real type `R`
-# that holds all of them exactly. `ProjectionProblem{R}` reads every constant into storage
-# of type `R`, and `project` then runs on concrete types throughout.
 
 "The addends of a sum, or `x` itself."
 function summands_of(x::SymbolicNode)
@@ -317,8 +302,6 @@ function scan_projection(terms::Vector{ExpandedTerm}, time, specs)
     )
 end
 
-# Typed kernel. A spectrum maps `[frequency; phase]` coefficient vectors to weights.
-
 const Spectrum{R} = Dict{Vector{R},Complex{R}}
 
 "A target with its frequency as a dense coefficient vector."
@@ -434,8 +417,6 @@ end
 
 "Build `cos(φ)` and `sin(φ)` for a canonical phase and return its number."
 function add_phase!(table::PhaseTable{R}, phase::Vector{R}) where {R}
-    # A purely numeric phase, whose only nonzero entry is the offset, is evaluated; a
-    # symbolic one keeps its numeric offset exact.
     if iszero(leading_coefficient(table, phase))
         push!(table.cosines, Const{NUM_VARTYPE}(cos(sum(phase))))
         push!(table.sines, Const{NUM_VARTYPE}(sin(sum(phase))))
@@ -498,7 +479,7 @@ function project_spectrum(
         a, b = real(w), imag(w)
         α, β = if target.kind != SinePart
             (a, -b)
-        elseif plus && minus # sin(0 t) vanishes
+        elseif plus && minus
             (zero(R), zero(R))
         else
             plus ? (-b, -a) : (b, a)
@@ -709,7 +690,6 @@ function series!(
             folded && (ν = -ν)
             index, flipped = phase_index!(phases, key[(nf + 1):end])
             a, b = real(w), imag(w)
-            # sin(φ) of the stored canonical phase, which `flipped` negates
             s = flipped ? -one(R) : one(R)
             cosine = get!(DenominatorGroups{R}, cosines, ν)
             push_term!(cosine, c * a, addend, phases.cosines[index])
