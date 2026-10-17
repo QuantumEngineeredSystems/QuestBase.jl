@@ -214,10 +214,29 @@ function append_terms!(terms::Vector{SymbolicNode}, x::SymbolicNode)
 end
 
 function is_harmonic(x::Num, t::Num)
-    all_terms = get_all_terms(x)
+    all_terms = get_all_terms(Num(time_dependent_part(unwrap(x), t)))
     t_terms = setdiff(all_terms, get_independent(all_terms, t))
     all(is_trig, t_terms) || return false
     return all(term -> isone(max_power(Num(first(arguments(unwrap(term)))), t)), t_terms)
+end
+
+"""
+The summands of `x` that are functions of `t`. Expanding a summand free of `t` yields only
+terms free of `t`, and those can neither merge with nor cancel a term holding `t`, so the
+terms of `x` that depend on `t` are those of this part. It is far smaller to expand.
+"""
+function time_dependent_part(x::SymbolicNode, t::Num)
+    return @match x begin
+        BSImpl.AddMul(; dict, variant) && if variant === AddMulVariant.ADD
+        end => SymbolicUtils.Add{NUM_VARTYPE}(
+            0,
+            Dict{SymbolicNode,Number}(
+                summand => weight for (summand, weight) in dict if is_function(summand, t)
+            );
+            type=Real,
+        )
+        _ => x
+    end
 end
 
 is_harmonic(x::Equation, t::Num) = is_harmonic(x.lhs, t) && is_harmonic(x.rhs, t)

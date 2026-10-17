@@ -4,7 +4,7 @@ using SymbolicUtils: BasicSymbolic
 using QuestBase: QuestBase, @eqtest
 
 @testset "harmonic" begin
-    using QuestBase: is_harmonic
+    using QuestBase: is_harmonic, d
 
     @variables a, b, c, t, x(t), f, y(t)
 
@@ -12,6 +12,13 @@ using QuestBase: QuestBase, @eqtest
     @test is_harmonic(1, t)
     @test !is_harmonic(cos(f * t^2 + a), t)
     @test !is_harmonic(a + t, t)
+
+    # only the summands holding `t` are expanded; the rest must not change the verdict
+    @test is_harmonic(a * x^3 + b * d(x, t, 2) + f * cos(f * t), t)
+    @test !is_harmonic(a * x + (b + cos(f * t))^2, t) # a power of a trig is not taken as harmonic
+    @test !is_harmonic(a * x^3 + t * cos(f * t), t)
+    @test is_harmonic(x + a / (b + cos(f * t)), t) # a denominator is split into its terms
+    @test !is_harmonic(x^2 + cos(f * t)^2 * exp(t), t)
 
     using QuestBase: DifferentialEquation
 
