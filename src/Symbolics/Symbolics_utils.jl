@@ -216,8 +216,19 @@ end
 function is_harmonic(x::Num, t::Num)
     all_terms = get_all_terms(Num(time_dependent_part(unwrap(x), t)))
     t_terms = setdiff(all_terms, get_independent(all_terms, t))
-    all(is_trig, t_terms) || return false
-    return all(term -> isone(max_power(Num(first(arguments(unwrap(term)))), t)), t_terms)
+    return all(term -> is_harmonic_factor(unwrap(term), t), t_terms)
+end
+
+"""
+Return true if `term` is a positive integer power of a cosine or sine whose argument is
+linear in `t`. A power such as `cos(ωt)^2` is a finite Fourier series too, and the
+projection expands it exactly.
+"""
+function is_harmonic_factor(term::SymbolicNode, t::Num)
+    base, exponent = base_exponent(term)
+    is_trig_call(base) || return false
+    (isconst(exponent) && with_const(is_expanded_power, exponent)) || return false
+    return isone(max_power(Num(first(arguments(base))), t))
 end
 
 """

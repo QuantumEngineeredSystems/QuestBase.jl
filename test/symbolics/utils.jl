@@ -15,7 +15,11 @@ using QuestBase: QuestBase, @eqtest
 
     # only the summands holding `t` are expanded; the rest must not change the verdict
     @test is_harmonic(a * x^3 + b * d(x, t, 2) + f * cos(f * t), t)
-    @test !is_harmonic(a * x + (b + cos(f * t))^2, t) # a power of a trig is not taken as harmonic
+    @test is_harmonic(a * x + (b + cos(f * t))^2, t)
+    @test is_harmonic(a * cos(f * t)^2 * x + sin(2f * t)^3, t)
+    @test is_harmonic(cos(f * t)^(-1), t) # 1/cos: a denominator is split, the projection rejects it
+    @test !is_harmonic(cos(f * t)^(1//2), t)
+    @test !is_harmonic(cos(f * t^2)^2, t)
     @test !is_harmonic(a * x^3 + t * cos(f * t), t)
     @test is_harmonic(x + a / (b + cos(f * t)), t) # a denominator is split into its terms
     @test !is_harmonic(x^2 + cos(f * t)^2 * exp(t), t)
