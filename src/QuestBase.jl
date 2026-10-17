@@ -1,23 +1,20 @@
 module QuestBase
 
 using DocStringExtensions
-import DynamicPolynomials as DP
-import MultivariatePolynomials as MP
+using Nemo: Nemo, QQ, QQFieldElem, QQMPolyRing, QQMPolyRingElem
 using OrderedCollections: OrderedCollections, OrderedDict, OrderedSet
 using LinearAlgebra: LinearAlgebra
+using Moshi.Match: @match
 
 using SymbolicUtils:
     SymbolicUtils,
+    AddMulVariant,
+    BSImpl,
     Postwalk,
     BasicSymbolic,
-    isterm,
-    ispow,
     isadd,
-    isdiv,
     ismul,
     issym,
-    add_with_div,
-    is_literal_number,
     unwrap_const,
     unwrap,
     vartype,
@@ -36,16 +33,13 @@ using Symbolics:
     Differential,
     arguments,
     term,
-    expand,
     operation,
     expand_derivatives,
-    tosymbol,
-    is_derivative,
-    sorted_arguments
+    is_derivative
 
 include("utils.jl")
 include("Symbolics/Symbolics_utils.jl")
-include("Symbolics/exponentials.jl")
+include("Symbolics/expansion.jl")
 include("Symbolics/pythagorean.jl")
 include("Symbolics/fourier.jl")
 include("Symbolics/harmonic_projection.jl")

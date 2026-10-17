@@ -18,22 +18,89 @@ julia>drop_powers((x+y)^2 + (x+y)^3, [x,y], 3)
 x^2 + y^2 + 2*x*y
 ```
 """
-function drop_powers(expr::BasicSymbolic, vars::AbstractVector, deg::Int)
+function drop_powers(expr::SymbolicNode, vars::AbstractVector, deg::Int)
     deg >= 0 || throw(ArgumentError("deg must be nonnegative"))
-    raw_vars = unique(unwrap.(vars))
-    all(var -> var isa BasicSymbolic, raw_vars) ||
+    all(var -> unwrap(var) isa BasicSymbolic, vars) ||
         throw(ArgumentError("vars must contain symbolic expressions"))
-    iszero(deg) && return unwrap(Num(0))
-    ϵ = unwrap(Symbolics.variable(gensym(:degree)))
-    rules = Dict(var => ϵ * var for var in raw_vars)
-    scaled = Symbolics.expand(substitute_all(expr, rules; include_derivatives=false))
-    max_deg = max_power(scaled, ϵ)
-    removal = Dict(ϵ^d => 0 for d in deg:max_deg)
-    truncated = substitute_all(scaled, removal; include_derivatives=false)
-    return Symbolics.expand(
-        substitute_all(truncated, Dict(ϵ => 1); include_derivatives=false)
-    )
+    iszero(deg) && return SYMBOLIC_ZERO
+    raw_vars = Set{SymbolicNode}(unwrap(var) for var in vars)
+    degree_bound(expr, raw_vars) < deg && return expr
+    terms = expanded_terms(expr)
+    kept = filter(term -> !is_dropped(term, raw_vars, deg), terms)
+    length(kept) == length(terms) && return expr
+    return expanded_expression(kept)
 end
+
+"""
+Whether the expanded `term` has combined degree at least `deg` in `vars`. A fraction's
+degree is that of its numerator less that of its denominator. A term holding a power of a
+variable that is not a number has no degree and is kept.
+"""
+function is_dropped(term::ExpandedTerm, vars::Set{SymbolicNode}, deg::Int)
+    num_degree, num_determined = monomial_degree(term.factors, vars)
+    den_degree, den_determined = monomial_degree(factors_of(term.denominator), vars)
+    degree = num_degree - den_degree
+    return num_determined && den_determined && isinteger(degree) && degree >= deg
+end
+
+"""
+The combined degree in `vars` of `factors`, and whether every power of a variable among
+them is a number. A factor that is not a power of a variable, such as `sin(x)` or a sum,
+has degree zero.
+"""
+function monomial_degree(factors, vars::Set{SymbolicNode})
+    degree = 0//1
+    for factor in factors
+        base, exponent = base_exponent(factor)
+        base in vars || continue
+        isconst(exponent) || return degree, false
+        degree += with_const(Rational{Int}, exponent)
+    end
+    return degree, true
+end
+
+"""
+An upper bound on the degree in `vars` of every term of `expanded_terms(x)`, read off the
+structure of `x` without expanding it. A fraction whose denominator holds a variable has no
+bound, `1//0`.
+"""
+function degree_bound(x::SymbolicNode, vars::Set{SymbolicNode})
+    x in vars && return 1//1
+    return @match x begin
+        BSImpl.AddMul(; dict, variant) => if variant === AddMulVariant.ADD
+            maximum(summand -> degree_bound(summand, vars), keys(dict); init=0//1)
+        else
+            bound = 0//1
+            for (base, exponent) in dict
+                bound += power_degree_bound(base, exponent, vars)
+            end
+            bound
+        end
+        BSImpl.Div(; num, den) =>
+            contains_variable(den, vars) ? 1//0 : degree_bound(num, vars)
+        BSImpl.Term(; f, args) && if f === (^) && isconst(args[2])
+        end => power_degree_bound(args[1], unwrap_const(args[2]), vars)
+        _ => 0//1
+    end
+end
+
+"""
+An upper bound on the degree in `vars` of the terms of `base^exponent`. A power of a
+variable has the degree of its exponent and a negative one is a denominator, of degree at
+most zero. Expansion distributes only positive integer powers, so any other power of an
+expression is a single factor that is not a variable.
+"""
+function power_degree_bound(
+    base::SymbolicNode, @nospecialize(exponent), vars::Set{SymbolicNode}
+)
+    base in vars && return max(with_number(Rational{Int}, exponent), 0//1)
+    with_number(is_expanded_power, exponent) || return 0//1
+    return with_number(Rational{Int}, exponent) * degree_bound(base, vars)
+end
+
+"Return true if expansion distributes the power `value` over the terms of its base."
+is_expanded_power(value::Integer) = value > 0
+is_expanded_power(value::Number) = false
 
 function drop_powers(expr::Num, vars::AbstractVector, deg::Int)
     return Num(drop_powers(unwrap(expr), vars, deg))
@@ -49,30 +116,23 @@ drop_powers(expr, var::Union{Num,BasicSymbolic}, deg::Int) = drop_powers(expr, [
 
 "Return the highest power of `y` occurring in the term `x`."
 function max_power(x::Num, y::Num)
-    terms = get_all_terms(x)
-    powers = power_of.(terms, y)
-    return maximum(powers)
+    return maximum(term -> power_of(term, y), get_all_terms(x))
 end
 
-max_power(x::Vector{Num}, y::Num) = maximum(max_power.(x, y))
-max_power(x::Complex, y::Num) = maximum(max_power.([x.re, x.im], y))
-max_power(x, t) = max_power(wrap(x), wrap(t))
+max_power(x::Vector{Num}, y::Num) = maximum(term -> max_power(term, y), x)
+max_power(x::Complex{Num}, y::Num) = max(max_power(x.re, y), max_power(x.im, y))
+max_power(x::SymbolicNode, y::SymbolicNode) = max_power(Num(x), Num(y))
 
-"Return the power of `y` in the term `x`"
+"Return the power of the symbol `y` in the term `x`."
 function power_of(x::Num, y::Num)
-    issym(unwrap(y)) ? nothing : error("power of " * string(y) * " is ambiguous")
+    issym(unwrap(y)) || throw(ArgumentError("The power of $y is ambiguous."))
     return power_of(unwrap(x), unwrap(y))
 end
 
-function power_of(x::BasicSymbolic, y::BasicSymbolic)
-    if ispow(x) && issym(y)
-        args = arguments(x)
-        return isequal(args[1], y) ? unwrap_const(args[2]) : 0
-    elseif issym(x) && issym(y)
-        return isequal(x, y) ? 1 : 0
-    else
-        return 0
-    end
+function power_of(x::SymbolicNode, y::SymbolicNode)
+    issym(y) || return 0//1
+    base, exponent = base_exponent(x)
+    isequal(base, y) || return 0//1
+    isconst(exponent) || throw(ArgumentError("The power of $y in $x is not a number."))
+    return with_const(Rational{Int}, exponent)
 end
-
-power_of(x, y) = 0
