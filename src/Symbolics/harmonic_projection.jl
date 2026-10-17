@@ -495,22 +495,40 @@ function project_spectrum(
     return contributions
 end
 
-"The spectrum of the trig product `signature`."
+"The spectra of trig products already convolved, keyed by their signature."
+const SpectrumCache{R} = Dict{Vector{Pair{Int,Int}},Spectrum{R}}
+
+"""
+The spectrum of the trig product `signature`. It is the spectrum of `signature` with one
+power of its last factor removed, convolved with that factor; the shorter product is looked
+up in `spectra` too, so signatures that share a prefix share its convolutions.
+"""
 function product_spectrum(
-    problem::ProjectionProblem{R}, signature::Vector{Pair{Int,Int}}
+    problem::ProjectionProblem{R},
+    signature::Vector{Pair{Int,Int}},
+    spectra::SpectrumCache{R},
 ) where {R}
-    spectrum = Spectrum{R}(zeros(R, problem.key_length) => one(Complex{R}))
-    for (factor, power) in signature, _ in 1:power
-        spectrum = convolve(spectrum, problem.factor_spectra[factor])
-    end
+    isempty(signature) &&
+        return Spectrum{R}(zeros(R, problem.key_length) => one(Complex{R}))
+    haskey(spectra, signature) && return spectra[signature]
+    factor, power = last(signature)
+    prefix = signature[1:(end - 1)]
+    power > 1 && push!(prefix, factor => power - 1)
+    spectrum = convolve(
+        product_spectrum(problem, prefix, spectra), problem.factor_spectra[factor]
+    )
+    spectra[signature] = spectrum
     return spectrum
 end
 
 "Projections of the trig product `signature` onto every target."
 function signature_contributions(
-    problem::ProjectionProblem{R}, signature::Vector{Pair{Int,Int}}, phases::PhaseTable{R}
+    problem::ProjectionProblem{R},
+    signature::Vector{Pair{Int,Int}},
+    phases::PhaseTable{R},
+    spectra::SpectrumCache{R},
 ) where {R}
-    spectrum = product_spectrum(problem, signature)
+    spectrum = product_spectrum(problem, signature, spectra)
     return [project_spectrum(spectrum, target, phases) for target in problem.targets]
 end
 
@@ -601,9 +619,10 @@ function project(problem::ProjectionProblem{R}) where {R}
     terms = [DenominatorGroups{R}() for _ in problem.targets]
     phases = PhaseTable{R}(problem.phase_atoms)
     cache = Dict{Vector{Pair{Int,Int}},Vector{Vector{PhaseContribution{R}}}}()
+    spectra = SpectrumCache{R}()
     for (addend, c) in zip(problem.addends, problem.coefficients)
         projected = get!(cache, addend.signature) do
-            return signature_contributions(problem, addend.signature, phases)
+            return signature_contributions(problem, addend.signature, phases, spectra)
         end
         for (target_terms, contributions) in zip(terms, projected), q in contributions
             push_term!(target_terms, c * q.cosine, addend, phases.cosines[q.phase])
@@ -679,11 +698,9 @@ function series!(
     nf::Int,
 ) where {R}
     phases = PhaseTable{R}(problem.phase_atoms)
-    cache = Dict{Vector{Pair{Int,Int}},Spectrum{R}}()
+    spectra = SpectrumCache{R}()
     for (addend, c) in zip(problem.addends, problem.coefficients)
-        spectrum = get!(cache, addend.signature) do
-            return product_spectrum(problem, addend.signature)
-        end
+        spectrum = product_spectrum(problem, addend.signature, spectra)
         for (key, w) in spectrum
             ν = key[1:nf]
             folded = leading_entry(ν) < 0
