@@ -22,7 +22,10 @@ using SymbolicUtils:
     unwrap,
     vartype,
     add_worker,
-    mul_worker
+    mul_worker,
+    Const,
+    isconst,
+    iscall
 
 using Symbolics:
     Symbolics,
@@ -45,6 +48,7 @@ include("Symbolics/Symbolics_utils.jl")
 include("Symbolics/exponentials.jl")
 include("Symbolics/pythagorean.jl")
 include("Symbolics/fourier.jl")
+include("Symbolics/harmonic_projection.jl")
 include("Symbolics/drop_powers.jl")
 include("Symbolics/linear_solve.jl")
 include("DifferentialEquation.jl")
