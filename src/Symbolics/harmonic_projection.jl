@@ -302,7 +302,24 @@ function scan_projection(terms::Vector{ExpandedTerm}, time, specs)
     )
 end
 
-const Spectrum{R} = Dict{Vector{R},Complex{R}}
+"""
+The weights of the exponentials `exp(i k⋅atoms)` of a trig product, keyed by `k`. A product
+of a few factors has only a handful of keys, so a vector searched linearly is cheaper to
+build and merge than a dictionary.
+"""
+const Spectrum{R} = Vector{Pair{Vector{R},Complex{R}}}
+
+"Add the weight `w` at `key` to `spectrum`, merging it into an equal key."
+function accumulate!(spectrum::Spectrum{R}, key::Vector{R}, w::Complex{R}) where {R}
+    for i in eachindex(spectrum)
+        if first(spectrum[i]) == key
+            spectrum[i] = key => last(spectrum[i]) + w
+            return spectrum
+        end
+    end
+    push!(spectrum, key => w)
+    return spectrum
+end
 
 "A target with its frequency as a dense coefficient vector."
 struct DenseTarget{R}
@@ -339,7 +356,7 @@ function trig_spectrum(::Type{R}, factor::TrigFactor, nf::Int, np::Int) where {R
     else
         Complex(half, zero(half)), Complex(half, zero(half))
     end
-    return Spectrum{R}(key => w₊, -key => w₋)
+    return accumulate!(accumulate!(Spectrum{R}(), key, w₊), -key, w₋)
 end
 
 function ProjectionProblem{R}(scanned::ScannedExpression) where {R}
@@ -445,10 +462,9 @@ function phase_index!(table::PhaseTable{R}, phase::Vector{R}) where {R}
 end
 
 function convolve(a::Spectrum{R}, b::Spectrum{R}) where {R}
-    product = Spectrum{R}()
+    product = sizehint!(Spectrum{R}(), length(a) * length(b))
     for (ka, wa) in a, (kb, wb) in b
-        key = ka + kb
-        product[key] = get(product, key, zero(Complex{R})) + wa * wb
+        accumulate!(product, ka + kb, wa * wb)
     end
     return filter!(!iszero ∘ last, product)
 end
@@ -509,7 +525,7 @@ function product_spectrum(
     spectra::SpectrumCache{R},
 ) where {R}
     isempty(signature) &&
-        return Spectrum{R}(zeros(R, problem.key_length) => one(Complex{R}))
+        return Spectrum{R}([zeros(R, problem.key_length) => one(Complex{R})])
     haskey(spectra, signature) && return spectra[signature]
     factor, power = last(signature)
     prefix = signature[1:(end - 1)]
