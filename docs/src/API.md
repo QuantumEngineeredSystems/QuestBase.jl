@@ -15,6 +15,7 @@ Depth = 2:3
 
 ```@docs
 QuestBase.DifferentialEquation
+QuestBase.rearrange_standard(::QuestBase.DifferentialEquation)
 QuestBase.rearrange_standard!(::QuestBase.DifferentialEquation)
 QuestBase.rearrange!
 QuestBase.is_rearranged_standard

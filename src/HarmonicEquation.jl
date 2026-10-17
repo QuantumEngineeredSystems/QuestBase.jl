@@ -179,50 +179,43 @@ end
 
 """
 $(TYPEDSIGNATURES)
-Rearrange `eom` to the standard form, such that the derivatives of the variables are on one side.
+
+Rearrange the equations in `eom` such that the expressions in `new_rhs` appear isolated on the
+right-hand sides. Modifies `eom` in place and returns it.
+
+Harmonic equations keep the solved-for expressions on the right, `f(u) ~ du/dT`, the opposite
+of the `DifferentialEquation` method, because downstream code reads the vector field from the
+left-hand sides.
 """
-function rearrange_standard(eom::HarmonicEquation)
-    tvar = get_independent_variables(eom)[1]
-    dvars = d(get_variables(eom), tvar)
-    return rearrange(eom, dvars)
+function rearrange!(eom::HarmonicEquation, new_rhs::Vector{Num})
+    eom.equations = solve_linear_system(eom.equations, new_rhs) .~ new_rhs
+    return eom
 end
 
 """
 $(TYPEDSIGNATURES)
-Rearrange `eom` to the standard form, such that the derivatives of the variables are on one side.
+
+Non-mutating version of [`rearrange!`](@ref).
+"""
+rearrange(eom::HarmonicEquation, new_rhs::Vector{Num}) = rearrange!(deepcopy(eom), new_rhs)
+
+"""
+$(TYPEDSIGNATURES)
+
+Rearrange `eom` to the standard form, where the first derivative of each variable appears
+isolated on the right-hand side. Modifies `eom` in place and returns it.
 """
 function rearrange_standard!(eom::HarmonicEquation)
-    tmp_eom = rearrange_standard(eom::HarmonicEquation)
-    eom.equations = tmp_eom.equations
-    return eom
+    tvar = get_independent_variables(eom)[1]
+    return rearrange!(eom, d(get_variables(eom), tvar))
 end
 
-"Rearrange an equation system such that the field equations is equal to the vector specified in new_lhs"
-function rearrange!(eom::HarmonicEquation, new_rhs::Vector{Num})
-    soln = try
-        fraction_free_linear_solve(eom.equations, new_rhs)
-    catch error
-        error isa BareissFailure || rethrow()
-        fallback = Symbolics.symbolic_linear_solve(
-            eom.equations, new_rhs; simplify=false, check=true
-        )
-        Symbolics.simplify_fractions.(Num.(fallback))
-    end
-    # SymbolicUtils 4 leaves `cos(x)^2 + sin(x)^2` standing, and these solutions carry the
-    # coefficient determinant in their denominator, so without collapsing it the expressions
-    # grow every time a system is rearranged.
-    soln = collapse_pythagorean.(soln)
-    soln = reduce_denominator.(soln)
-    eom.equations = soln .~ new_rhs
-    return nothing
-end
+"""
+$(TYPEDSIGNATURES)
 
-"Rearrange an equation system such that the field equations is equal to the vector specified in new_lhs"
-function rearrange(eom::HarmonicEquation, new_rhs::Vector{Num})
-    new_eom = deepcopy(eom)
-    rearrange!(new_eom, new_rhs)
-    return new_eom
-end
+Non-mutating version of [`rearrange_standard!`](@ref).
+"""
+rearrange_standard(eom::HarmonicEquation) = rearrange_standard!(deepcopy(eom))
 
 """
 $(TYPEDSIGNATURES)

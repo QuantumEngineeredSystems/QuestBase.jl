@@ -10,7 +10,9 @@ using QuestBase:
     is_harmonic,
     get_independent_variables,
     add_harmonic!,
+    rearrange_standard,
     rearrange_standard!,
+    get_equations,
     is_rearranged_standard,
     rearrange,
     substitute_all,
@@ -77,9 +79,15 @@ end
     # Test is_rearranged_standard
     @test !is_rearranged_standard(diff_eq)
 
-    # Test rearrange_standard!
-    rearrange_standard!(diff_eq)
+    # The non-mutating form leaves its input untouched
+    standard = rearrange_standard(diff_eq)
+    @test is_rearranged_standard(standard)
+    @test !is_rearranged_standard(diff_eq)
+
+    # Test rearrange_standard!, which returns the mutated system
+    @test rearrange_standard!(diff_eq) === diff_eq
     @test is_rearranged_standard(diff_eq)
+    @eqtest get_equations(diff_eq) == get_equations(standard)
 
     # Test rearrange
     new_eq = rearrange(diff_eq, [x])

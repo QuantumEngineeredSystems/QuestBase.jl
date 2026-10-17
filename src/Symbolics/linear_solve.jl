@@ -109,6 +109,34 @@ function fraction_free_linear_solve(equations, variables)
     return solution
 end
 
+"""
+    solve_linear_system(equations, variables)
+
+Solve the linear system `equations` for `variables`, the kernel behind every `rearrange!`.
+
+Bareiss elimination is tried first (see [`fraction_free_linear_solve`](@ref)). A system that
+is not polynomial in its coefficients raises a [`BareissFailure`](@ref) and is handed to
+`Symbolics.symbolic_linear_solve` instead, whose nested fractions are then flattened. A
+[`BareissTooLarge`](@ref) propagates.
+
+SymbolicUtils 4 leaves `cos(x)^2 + sin(x)^2` standing, and these solutions carry the
+coefficient determinant in their denominator, so the Pythagorean identity is collapsed in
+both numerator and denominator. Without it the expressions grow every time a system is
+rearranged.
+"""
+function solve_linear_system(equations, variables)
+    solution = try
+        fraction_free_linear_solve(equations, variables)
+    catch error
+        error isa BareissFailure || rethrow()
+        fallback = Symbolics.symbolic_linear_solve(
+            equations, variables; simplify=false, check=true
+        )
+        Symbolics.simplify_fractions.(Num.(fallback))
+    end
+    return reduce_denominator.(collapse_pythagorean.(solution))
+end
+
 "Is `entry` zero on its face, so the row and column it joins are unrelated?"
 function _is_structural_zero(entry)
     value = unwrap_const(unwrap(entry))

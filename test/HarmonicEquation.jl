@@ -82,6 +82,8 @@ end
     # Test rearrange
     rearranged = rearrange_standard(heq)
     @test is_rearranged(rearranged)
+    @test QuestBase.rearrange_standard!(heq) === heq
+    @eqtest heq.equations == rearranged.equations
 
     # Test substitute_all
     @variables a
