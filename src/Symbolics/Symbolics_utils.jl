@@ -134,14 +134,7 @@ has_zero_imaginary(value::Real) = false
 "The real part of `value` as a symbolic constant."
 real_constant(value::Number) = Const{NUM_VARTYPE}(real(value))
 
-"""
-$(TYPEDSIGNATURES)
-
-Perform substitutions in `rules` on `x`.
-`include_derivatives=true` also substitutes inside derivative arguments using
-`Symbolics.substitute_in_deriv`.
-"""
-Subtype = Union{Num,Equation,BasicSymbolic}
+const Subtype = Union{Num,Equation,BasicSymbolic}
 
 function _deep_substitute(e::BasicSymbolic, unwrap_rules::Dict)
     return SymbolicUtils.substitute(e, unwrap_rules; filterer=_ -> true)
@@ -154,6 +147,13 @@ function _deep_substitute(eq::Equation, ur::Dict)
 end
 _deep_substitute(x, ::Dict) = x
 
+"""
+$(TYPEDSIGNATURES)
+
+Perform substitutions in `rules` on `x`.
+`include_derivatives=true` also substitutes inside derivative arguments using
+`Symbolics.substitute_in_deriv`.
+"""
 function substitute_all(x::Subtype, rules::Dict; include_derivatives=true)
     unwrap_rules = Dict(unwrap(k) => unwrap(v) for (k, v) in rules)
     result = _deep_substitute(x, unwrap_rules)
@@ -163,7 +163,7 @@ function substitute_all(x::Subtype, rules::Dict; include_derivatives=true)
     return result
 end
 
-Collections = Union{Dict,Pair,Vector,OrderedDict}
+const Collections = Union{Dict,Pair,Vector,OrderedDict}
 substitute_all(v::AbstractArray, rules) = [substitute_all(x, rules) for x in v]
 substitute_all(x::Subtype, rules::Collections) = substitute_all(x, Dict(rules))
 function substitute_all(x::Complex{Num}, rules::Collections)
