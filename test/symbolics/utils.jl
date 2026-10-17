@@ -64,14 +64,14 @@ end
     @test isempty(nonpolynomial_terms(DifferentialEquation([x + a * x^3, y], [x, y])))
 end
 
-@testset "_apply_termwise" begin
-    using QuestBase: _apply_termwise
+@testset "apply_termwise" begin
+    using QuestBase: apply_termwise
 
     @variables a, b, c
 
-    @eqtest _apply_termwise(x -> x^2, a + b + c) == a^2 + b^2 + c^2
-    @eqtest _apply_termwise(x -> x^2, a * b * c) == a^2 * b^2 * c^2
-    @eqtest _apply_termwise(x -> x^2, a / b) == a^2 / b^2
+    @eqtest apply_termwise(x -> x^2, a + b + c) == a^2 + b^2 + c^2
+    @eqtest apply_termwise(x -> x^2, a * b * c) == a^2 * b^2 * c^2
+    @eqtest apply_termwise(x -> x^2, a / b) == a^2 / b^2
 end
 
 @testset "simplify_complex" begin

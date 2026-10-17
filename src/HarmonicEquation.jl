@@ -38,7 +38,7 @@ mutable struct HarmonicEquation{T}
                 dummy_symbolic_Jacobian(length(variables)),
                 nat_eq,
             );
-            x.parameters=_parameters(x);
+            x.parameters=harmonic_parameters(x);
             x
         )
     end
@@ -88,7 +88,7 @@ See also [`source`](@ref).
 source_type(eom::HarmonicEquation{T}) where {T} = T
 
 "Get the parameters (not time nor variables) of a HarmonicEquation"
-function _parameters(eom::HarmonicEquation)
+function harmonic_parameters(eom::HarmonicEquation)
     all_symbols = Num[]
     for eq in eom.equations
         for v in collect(Symbolics.get_variables(eq.lhs))

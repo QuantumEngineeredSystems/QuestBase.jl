@@ -57,7 +57,7 @@ end
 Base.display(var::HarmonicVariable) = display(var.name)
 Base.display(var::Vector{HarmonicVariable}) = display.(getfield.(var, Symbol("name")))
 
-function _coordinate_transform(new_var, ω, t, type)::Num
+function coordinate_transform(new_var, ω, t, type)::Num
     coords = Dict([
         "u" => new_var * cos(ω * t), "v" => new_var * sin(ω * t), "a" => new_var
     ])
@@ -78,7 +78,7 @@ function _create_harmonic_variable(
 )::Tuple{Num,HarmonicVariable}
     new_var = declare_variable(new_symbol, t)
     name = type * "_{" * var_name(nat_var) * "," * Base.replace(string(ω), "*" => "") * "}"
-    rule = _coordinate_transform(new_var, ω, t, type)
+    rule = coordinate_transform(new_var, ω, t, type)
     hvar = HarmonicVariable(new_var, name, type, ω, nat_var)
     return rule, hvar
 end

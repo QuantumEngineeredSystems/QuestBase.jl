@@ -266,7 +266,7 @@ end
 Rebuild a symbolic expression from a polynomial of the solution ring.
 
 A solved entry carries thousands of monomials, so the sum and the per-monomial product go to
-`add_worker`/`mul_worker` whole rather than through `+=`/`*=`. See [`_apply_termwise`](@ref).
+`add_worker`/`mul_worker` whole rather than through `+=`/`*=`. See [`apply_termwise`](@ref).
 """
 function from_ring(polynomial::QQMPolyRingElem, atoms::RingAtoms)
     addends = SymbolicNode[]

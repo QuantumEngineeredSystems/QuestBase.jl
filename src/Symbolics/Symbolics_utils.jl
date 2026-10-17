@@ -33,11 +33,11 @@ function is_trig_call(x::SymbolicNode)
     end
 end
 
-_apply_termwise(f, x::Num) = Num(_apply_termwise(f, unwrap(x)))
+apply_termwise(f, x::Num) = Num(apply_termwise(f, unwrap(x)))
 
 function expand_fraction(x::SymbolicNode)
     return @match x begin
-        BSImpl.AddMul(;) => _apply_termwise(expand_fraction, x)
+        BSImpl.AddMul(;) => apply_termwise(expand_fraction, x)
         BSImpl.Div(; num, den) => begin
             expanded = SymbolicUtils.expand(num)
             isadd(expanded) || return x
@@ -101,7 +101,7 @@ Apply a function f on every member of a sum or a product.
 
 Rebuilt with `add_worker`/`mul_worker`; folding with `sum` is `O(n²)`.
 """
-function _apply_termwise(f::F, x::SymbolicNode) where {F}
+function apply_termwise(f::F, x::SymbolicNode) where {F}
     return @match x begin
         BSImpl.AddMul(; variant) => begin
             terms = SymbolicNode[f(arg) for arg in arguments(x)]
@@ -111,7 +111,7 @@ function _apply_termwise(f::F, x::SymbolicNode) where {F}
                 mul_worker(NUM_VARTYPE, terms)
             end
         end
-        BSImpl.Div(; num, den) => _apply_termwise(f, num) / _apply_termwise(f, den)
+        BSImpl.Div(; num, den) => apply_termwise(f, num) / apply_termwise(f, den)
         _ => f(x)
     end
 end
@@ -120,7 +120,7 @@ simplify_complex(x::Complex) = isequal(x.im, 0) ? x.re : x.re + im * x.im
 simplify_complex(x) = x
 function simplify_complex(x::SymbolicNode)
     return @match x begin
-        BSImpl.AddMul(;) || BSImpl.Div(;) => _apply_termwise(simplify_complex, x)
+        BSImpl.AddMul(;) || BSImpl.Div(;) => apply_termwise(simplify_complex, x)
         BSImpl.Const(;) =>
             with_const(has_zero_imaginary, x) ? with_const(real_constant, x) : x
         _ => x
@@ -136,16 +136,16 @@ real_constant(value::Number) = Const{NUM_VARTYPE}(real(value))
 
 const Subtype = Union{Num,Equation,BasicSymbolic}
 
-function _deep_substitute(e::BasicSymbolic, unwrap_rules::Dict)
+function deep_substitute(e::BasicSymbolic, unwrap_rules::Dict)
     return SymbolicUtils.substitute(e, unwrap_rules; filterer=_ -> true)
 end
-_deep_substitute(x::Num, ur::Dict) = wrap(_deep_substitute(unwrap(x), ur))
-function _deep_substitute(eq::Equation, ur::Dict)
+deep_substitute(x::Num, ur::Dict) = wrap(deep_substitute(unwrap(x), ur))
+function deep_substitute(eq::Equation, ur::Dict)
     return Equation(
-        _deep_substitute(unwrap(eq.lhs), ur), _deep_substitute(unwrap(eq.rhs), ur)
+        deep_substitute(unwrap(eq.lhs), ur), deep_substitute(unwrap(eq.rhs), ur)
     )
 end
-_deep_substitute(x, ::Dict) = x
+deep_substitute(x, ::Dict) = x
 
 """
 $(TYPEDSIGNATURES)
@@ -156,7 +156,7 @@ Perform substitutions in `rules` on `x`.
 """
 function substitute_all(x::Subtype, rules::Dict; include_derivatives=true)
     unwrap_rules = Dict(unwrap(k) => unwrap(v) for (k, v) in rules)
-    result = _deep_substitute(x, unwrap_rules)
+    result = deep_substitute(x, unwrap_rules)
     if include_derivatives
         result = Symbolics.substitute_in_deriv(result, rules)
     end
@@ -179,7 +179,7 @@ get_independent(x, t::Num) = x
 
 function get_independent(x::SymbolicNode, t::Num)
     return @match x begin
-        BSImpl.AddMul(;) => _apply_termwise(arg -> get_independent(arg, t), x)
+        BSImpl.AddMul(;) => apply_termwise(arg -> get_independent(arg, t), x)
         BSImpl.Div(; num, den) =>
             is_function(den, t) ? SYMBOLIC_ZERO : get_independent(num, t) / den
         BSImpl.Term(;) || BSImpl.Sym(;) => is_function(x, t) ? SYMBOLIC_ZERO : x
@@ -264,12 +264,12 @@ Return true if `needle` occurs as a subexpression of `haystack`.
 Structural, not `occursin(string(needle), string(haystack))`: pretty-printing costs a full
 render and normalises, reorders and elides.
 """
-occurs_in(needle, haystack) = _occurs_in(unwrap(needle), unwrap(haystack))
+occurs_in(needle, haystack) = occurs_within(unwrap(needle), unwrap(haystack))
 
-function _occurs_in(target, expr)
+function occurs_within(target, expr)
     isequal(expr, target) && return true
     expr isa BasicSymbolic && SymbolicUtils.iscall(expr) || return false
-    return any(arg -> _occurs_in(target, arg), arguments(expr))
+    return any(arg -> occurs_within(target, arg), arguments(expr))
 end
 
 """
