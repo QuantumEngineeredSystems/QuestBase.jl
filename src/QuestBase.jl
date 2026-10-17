@@ -1,8 +1,7 @@
 module QuestBase
 
 using DocStringExtensions
-import DynamicPolynomials as DP
-import MultivariatePolynomials as MP
+using Nemo: Nemo, QQ, QQFieldElem, QQMPolyRing, QQMPolyRingElem
 using OrderedCollections: OrderedCollections, OrderedDict, OrderedSet
 using LinearAlgebra: LinearAlgebra
 

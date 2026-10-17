@@ -422,7 +422,7 @@ end
 
 @testset "fraction-free linear solve splits independent blocks" begin
     using LinearAlgebra
-    using QuestBase: fraction_free_linear_solve, _system_blocks
+    using QuestBase: fraction_free_linear_solve, system_blocks
 
     @variables a b c x y z w p q
 
@@ -449,11 +449,11 @@ end
 
     # Whole matrix nonzero: one component, so there is nothing to split and the solve runs
     # as before.
-    @test isnothing(_system_blocks(Num[1 1; 1 1]))
+    @test system_blocks(Num[1 1; 1 1]) == [([1, 2], [1, 2])]
 
     # A structurally singular pattern has an unbalanced component, and is left to the full
     # solve to reject rather than being silently split.
-    @test isnothing(_system_blocks(Num[1 1; 0 0]))
+    @test system_blocks(Num[1 1; 0 0]) == [([1, 2], [1, 2])]
     @test_throws LinearAlgebra.SingularException fraction_free_linear_solve(
         [x + y ~ a, 0 * x + 0 * y ~ b], [x, y]
     )
