@@ -1,34 +1,20 @@
-# Fourier projection of expressions polynomial in cos and sin of arguments linear in time.
-#
-# After `expand`, every addend of `x` reads `c * m * Π_j f_j(ν_j t + φ_j)^p_j / d`, where
-# `m`, `d` and the frequencies `ν_j` and phases `φ_j` are free of `t`, `f_j` is `cos` or
-# `sin`, and `p_j` is a positive integer. With `cos(a) = (e^{ia} + e^{-ia})/2` and
-# `sin(a) = (-i e^{ia} + i e^{-ia})/2`, the trig part is a finite sum `Σ w e^{i(ν t + φ)}`
-# with numeric weights `w`. The coefficients of `cos(ωt)` and `sin(ωt)` come from the terms
-# with `ν = ±ω`, and each phase contributes `cos(φ)` and `sin(φ)` factors. Addends that
-# share a trig part share its spectrum, which is therefore built once.
-#
-# `scan_projection` walks the expanded expression once, checks that it has this form and
-# records its structure. Numeric constants stay symbolic during the scan, because
-# SymbolicUtils stores their values untyped; the scan only determines the real type `R`
-# that holds all of them exactly. `ProjectionProblem{R}` reads every constant into storage
-# of type `R`, and `project` then runs on concrete types throughout.
-
-const SymbolicNode = BasicSymbolic{NUM_VARTYPE}
-const SymbolicArguments = SymbolicUtils.ROArgsT{NUM_VARTYPE}
-const SYMBOLIC_ONE = Const{NUM_VARTYPE}(1)
-const SYMBOLIC_ZERO = Const{NUM_VARTYPE}(0)
 
 "The addends of a sum, or `x` itself."
 function summands_of(x::SymbolicNode)
-    isadd(x) && return arguments(x)
-    return SymbolicArguments(SymbolicUtils.ArgsT{NUM_VARTYPE}((x,)))
+    return @match x begin
+        BSImpl.AddMul(; variant) && if variant === AddMulVariant.ADD
+        end => arguments(x)
+        _ => SymbolicArguments(SymbolicUtils.ArgsT{NUM_VARTYPE}((x,)))
+    end
 end
 
 "The factors of a product, or `x` itself."
 function factors_of(x::SymbolicNode)
-    ismul(x) && return arguments(x)
-    return SymbolicArguments(SymbolicUtils.ArgsT{NUM_VARTYPE}((x,)))
+    return @match x begin
+        BSImpl.AddMul(; variant) && if variant === AddMulVariant.MUL
+        end => arguments(x)
+        _ => SymbolicArguments(SymbolicUtils.ArgsT{NUM_VARTYPE}((x,)))
+    end
 end
 
 "The product of `factors`, which may be empty."
@@ -83,15 +69,39 @@ struct HarmonicTarget
 end
 
 """
-An addend `coefficient * rest * Π_k trig_k^p_k / denominator`, with its trig part stored as
-`k => p_k` pairs sorted by `k`.
+An addend `coefficient * Π rest * Π_k trig_k^p_k / denominator`, with its trig part stored
+as `k => p_k` pairs sorted by `k`. The `t`-free factors `rest` are sorted by hash, so equal
+products compare equal without being built as expressions.
 """
 struct ScannedAddend
     coefficient::SymbolicNode
-    rest::SymbolicNode
+    rest::Vector{SymbolicNode}
     denominator::SymbolicNode
     signature::Vector{Pair{Int,Int}}
 end
+
+"""
+The number type a projection is computed in, read off the constants of the expression:
+`Rational{Int}` unless a constant needs a big integer (`big`) or is inexact (`inexact`).
+"""
+struct NumericKind
+    big::Bool
+    inexact::Bool
+end
+
+NumericKind(::Union{Int,Bool,Rational{Int}}) = NumericKind(false, false)
+NumericKind(::Union{BigInt,Rational{BigInt}}) = NumericKind(true, false)
+NumericKind(::Union{Float64,Float32,Irrational}) = NumericKind(false, true)
+NumericKind(::BigFloat) = NumericKind(true, true)
+function NumericKind(value::Complex)
+    iszero(imag(value)) && return NumericKind(real(value))
+    return throw(
+        ArgumentError("Fourier projection requires real coefficients, found $value.")
+    )
+end
+
+"The kind that holds the constants of both `a` and `b`."
+Base.:|(a::NumericKind, b::NumericKind) = NumericKind(a.big | b.big, a.inexact | b.inexact)
 
 "The expanded expression in the form `ProjectionProblem` consumes."
 struct ScannedExpression
@@ -100,7 +110,7 @@ struct ScannedExpression
     targets::Vector{HarmonicTarget}
     frequencies::AtomTable
     phases::AtomTable
-    numeric_type::DataType
+    numeric_kind::NumericKind
 end
 
 "State of `scan_projection`."
@@ -111,7 +121,7 @@ struct ProjectionScan
     trig_index::Dict{SymbolicNode,Int}
     trig_factors::Vector{TrigFactor}
     time_dependence::Dict{SymbolicNode,Bool}
-    numeric_type::Base.RefValue{DataType}
+    numeric_kind::Base.RefValue{NumericKind}
 end
 
 function ProjectionScan(time::SymbolicNode)
@@ -122,7 +132,7 @@ function ProjectionScan(time::SymbolicNode)
         Dict{SymbolicNode,Int}(),
         TrigFactor[],
         Dict{SymbolicNode,Bool}(),
-        Ref{DataType}(Rational{Int}),
+        Ref(NumericKind(false, false)),
     )
 end
 
@@ -135,23 +145,12 @@ function depends_on_time(scan::ProjectionScan, x::SymbolicNode)
     end
 end
 
-"The real type that holds the constant `value` exactly."
-real_type(value::Real) = typeof(value)
-function real_type(value::Complex)
-    iszero(imag(value)) && return typeof(real(value))
-    return throw(
-        ArgumentError("Fourier projection requires real coefficients, found $value.")
-    )
-end
-
-"Record the numeric type of the constant `node` and return `node`."
-function numeric_constant!(scan::ProjectionScan, node::SymbolicNode)
-    promote_numeric_type!(scan.numeric_type, unwrap_const(node))
-    return node
-end
-
-function promote_numeric_type!(numeric_type::Base.RefValue{DataType}, value::Number)
-    return numeric_type[] = promote_type(numeric_type[], real_type(value))
+"Record the numeric kind of the constant `node` and return its product with `coefficient`."
+function numeric_constant!(
+    scan::ProjectionScan, coefficient::SymbolicNode, node::SymbolicNode
+)
+    scan.numeric_kind[] |= with_const(NumericKind, node)
+    return isequal(coefficient, SYMBOLIC_ONE) ? node : coefficient * node
 end
 
 function non_polynomial(factor::SymbolicNode)
@@ -162,18 +161,25 @@ end
 function positive_power(power::Integer, factor::SymbolicNode)
     return power > 0 ? Int(power) : non_polynomial(factor)
 end
-positive_power(power, factor::SymbolicNode) = non_polynomial(factor)
+positive_power(power::Number, factor::SymbolicNode) = non_polynomial(factor)
 
-"The exponent of a trig factor `f(ν t + φ)^p`."
-trig_power(factor::SymbolicNode) = ispow(factor) ? trig_exponent(factor) : 1
-
-function trig_exponent(factor::SymbolicNode)
-    exponent = last(arguments(factor))
+"The exponent of a trig factor `f(ν t + φ)^p`, which must be a positive integer."
+function trig_power(factor::SymbolicNode)
+    exponent = last(base_exponent(factor))
     isconst(exponent) || non_polynomial(factor)
-    return positive_power(unwrap_const(exponent), factor)
+    return with_const(power -> positive_power(power, factor), exponent)
 end
 
-is_trig_call(x::SymbolicNode) = iscall(x) && (operation(x) === cos || operation(x) === sin)
+"""
+Whether the trig factor `factor` enters the spectrum, which needs a positive integer power. A
+time-free factor that fails this, such as `1/cos(ψ)`, is a plain coefficient instead.
+"""
+function is_spectral_power(factor::SymbolicNode)
+    exponent = last(base_exponent(factor))
+    return isconst(exponent) && with_const(is_positive_integer, exponent)
+end
+is_positive_integer(value::Integer) = value > 0
+is_positive_integer(value::Number) = false
 
 function nonlinear_argument(argument::SymbolicNode)
     return throw(ArgumentError("The trig argument $argument is not linear in time."))
@@ -184,13 +190,14 @@ function scan_argument(scan::ProjectionScan, argument::SymbolicNode)
     frequency = AtomCombination()
     phase = AtomCombination()
     factors = SymbolicNode[]
-    for summand in summands_of(argument)
+    for term in expanded_terms(argument)
+        depends_on_time(scan, term.denominator) && nonlinear_argument(argument)
         coefficient = SYMBOLIC_ONE
         time_power = 0
         empty!(factors)
-        for factor in factors_of(summand)
+        for factor in term.factors
             if isconst(factor)
-                coefficient = numeric_constant!(scan, factor)
+                coefficient = numeric_constant!(scan, coefficient, factor)
             elseif isequal(factor, scan.time)
                 time_power += 1
             elseif depends_on_time(scan, factor)
@@ -200,7 +207,7 @@ function scan_argument(scan::ProjectionScan, argument::SymbolicNode)
             end
         end
         time_power <= 1 || nonlinear_argument(argument)
-        atom = monomial(factors)
+        atom = term_expression(ExpandedTerm(factors, term.denominator))
         if isone(time_power)
             push!(frequency, atom_index!(scan.frequencies, atom) => coefficient)
         else
@@ -227,27 +234,26 @@ function scan_target(scan::ProjectionScan, ω, f)
     frequency = Num(ω)
     depends_on_time(scan, unwrap(frequency)) &&
         throw(ArgumentError("The harmonic frequency $ω must not depend on time."))
-    argument = scan_argument(scan, unwrap(expand(frequency * Num(scan.time))))
+    argument = scan_argument(scan, unwrap(frequency * Num(scan.time)))
     return HarmonicTarget(f === cos ? CosinePart : SinePart, argument.frequency)
 end
 
-"Split one expanded addend into its coefficient, `t`-free factors and trig part."
-function scan_addend(
-    scan::ProjectionScan,
-    rest::Vector{SymbolicNode},
-    addend::SymbolicNode,
-    denominator::SymbolicNode,
-)
+"Split one expanded term into its coefficient, `t`-free factors and trig part."
+function scan_addend(scan::ProjectionScan, term::ExpandedTerm)
+    depends_on_time(scan, term.denominator) && throw(
+        ArgumentError("Cannot project: time enters the denominator $(term.denominator)."),
+    )
     coefficient = SYMBOLIC_ONE
-    empty!(rest)
+    rest = SymbolicNode[]
     signature = Pair{Int,Int}[]
-    for factor in factors_of(addend)
+    for factor in term.factors
         if isconst(factor)
-            coefficient = numeric_constant!(scan, factor)
+            coefficient = numeric_constant!(scan, coefficient, factor)
             continue
         end
-        base = ispow(factor) ? first(arguments(factor)) : factor
-        if is_trig_call(base)
+        base = first(base_exponent(factor))
+        if is_trig_call(base) &&
+            (is_spectral_power(factor) || depends_on_time(scan, factor))
             push!(signature, trig_factor_index!(scan, base) => trig_power(factor))
         elseif depends_on_time(scan, factor)
             throw(
@@ -259,37 +265,61 @@ function scan_addend(
             push!(rest, factor)
         end
     end
-    return ScannedAddend(coefficient, monomial(rest), denominator, sort!(signature))
+    sort!(rest; by=hash)
+    return ScannedAddend(
+        coefficient, rest, term.denominator, merge_powers!(sort!(signature))
+    )
 end
 
-"Expand `x` and record what `ProjectionProblem` needs, or throw if `x` cannot be projected."
-function scan_projection(x, time, specs)
-    scan = ProjectionScan(unwrap(Num(time)))
-    targets = [scan_target(scan, ω, f) for (ω, f) in specs]
-    addends = ScannedAddend[]
-    rest = SymbolicNode[]
-    for summand in summands_of(unwrap(expand(Num(x))))
-        numerator = isdiv(summand) ? first(arguments(summand)) : summand
-        denominator = isdiv(summand) ? last(arguments(summand)) : SYMBOLIC_ONE
-        depends_on_time(scan, denominator) &&
-            throw(ArgumentError("Cannot project $x: time enters a denominator."))
-        for addend in summands_of(numerator)
-            push!(addends, scan_addend(scan, rest, addend, denominator))
+"The sorted signature `k => p_k` with the powers of a repeated trig factor `k` summed."
+function merge_powers!(signature::Vector{Pair{Int,Int}})
+    merged = 0
+    for (index, power) in signature
+        if merged > 0 && first(signature[merged]) == index
+            signature[merged] = index => last(signature[merged]) + power
+        else
+            signature[merged += 1] = index => power
         end
     end
+    return resize!(signature, merged)
+end
+
+"""
+Record what `ProjectionProblem` needs from the expanded `terms`, or throw if they cannot be
+projected.
+"""
+function scan_projection(terms::Vector{ExpandedTerm}, time, specs)
+    scan = ProjectionScan(unwrap(Num(time)))
+    targets = [scan_target(scan, ω, f) for (ω, f) in specs]
+    addends = ScannedAddend[scan_addend(scan, term) for term in terms]
     return ScannedExpression(
         addends,
         scan.trig_factors,
         targets,
         scan.frequencies,
         scan.phases,
-        scan.numeric_type[],
+        scan.numeric_kind[],
     )
 end
 
-# Typed kernel. A spectrum maps `[frequency; phase]` coefficient vectors to weights.
+"""
+The weights of the exponentials `exp(i k⋅atoms)` of a trig product, keyed by `k`. A product
+of a few factors has only a handful of keys, so a vector searched linearly is cheaper to
+build and merge than a dictionary.
+"""
+const Spectrum{R} = Vector{Pair{Vector{R},Complex{R}}}
 
-const Spectrum{R} = Dict{Vector{R},Complex{R}}
+"Add the weight `w` at `key` to `spectrum`, merging it into an equal key."
+function accumulate!(spectrum::Spectrum{R}, key::Vector{R}, w::Complex{R}) where {R}
+    for i in eachindex(spectrum)
+        if first(spectrum[i]) == key
+            spectrum[i] = key => last(spectrum[i]) + w
+            return spectrum
+        end
+    end
+    push!(spectrum, key => w)
+    return spectrum
+end
 
 "A target with its frequency as a dense coefficient vector."
 struct DenseTarget{R}
@@ -310,7 +340,7 @@ end
 function dense_combination(::Type{R}, combination::AtomCombination, n::Int) where {R}
     vector = zeros(R, n)
     for (index, coefficient) in combination
-        vector[index] = unwrap_const(coefficient)
+        vector[index] = with_const(R, coefficient)
     end
     return vector
 end
@@ -326,7 +356,7 @@ function trig_spectrum(::Type{R}, factor::TrigFactor, nf::Int, np::Int) where {R
     else
         Complex(half, zero(half)), Complex(half, zero(half))
     end
-    return Spectrum{R}(key => w₊, -key => w₋)
+    return accumulate!(accumulate!(Spectrum{R}(), key, w₊), -key, w₋)
 end
 
 function ProjectionProblem{R}(scanned::ScannedExpression) where {R}
@@ -334,7 +364,7 @@ function ProjectionProblem{R}(scanned::ScannedExpression) where {R}
     np = length(scanned.phases.atoms)
     return ProjectionProblem{R}(
         scanned.addends,
-        R[unwrap_const(addend.coefficient) for addend in scanned.addends],
+        R[with_const(R, addend.coefficient) for addend in scanned.addends],
         [trig_spectrum(R, factor, nf, np) for factor in scanned.trig_factors],
         [
             DenseTarget{R}(target.kind, dense_combination(R, target.frequency, nf)) for
@@ -343,6 +373,22 @@ function ProjectionProblem{R}(scanned::ScannedExpression) where {R}
         scanned.phases.atoms,
         nf + np,
     )
+end
+
+"""
+    with_problem(f, scanned)
+
+`f` applied to the `ProjectionProblem` of `scanned` in the number type its constants need.
+Each branch names its type, so `f` is compiled for every one and the call stays inferable.
+"""
+function with_problem(f::F, scanned::ScannedExpression) where {F}
+    kind = scanned.numeric_kind
+    if kind.inexact
+        kind.big && return f(ProjectionProblem{BigFloat}(scanned))
+        return f(ProjectionProblem{Float64}(scanned))
+    end
+    kind.big && return f(ProjectionProblem{Rational{BigInt}}(scanned))
+    return f(ProjectionProblem{Rational{Int}}(scanned))
 end
 
 "The constant `x`, with integer-valued rationals stored as integers."
@@ -388,8 +434,6 @@ end
 
 "Build `cos(φ)` and `sin(φ)` for a canonical phase and return its number."
 function add_phase!(table::PhaseTable{R}, phase::Vector{R}) where {R}
-    # A purely numeric phase, whose only nonzero entry is the offset, is evaluated; a
-    # symbolic one keeps its numeric offset exact.
     if iszero(leading_coefficient(table, phase))
         push!(table.cosines, Const{NUM_VARTYPE}(cos(sum(phase))))
         push!(table.sines, Const{NUM_VARTYPE}(sin(sum(phase))))
@@ -418,10 +462,9 @@ function phase_index!(table::PhaseTable{R}, phase::Vector{R}) where {R}
 end
 
 function convolve(a::Spectrum{R}, b::Spectrum{R}) where {R}
-    product = Spectrum{R}()
+    product = sizehint!(Spectrum{R}(), length(a) * length(b))
     for (ka, wa) in a, (kb, wb) in b
-        key = ka + kb
-        product[key] = get(product, key, zero(Complex{R})) + wa * wb
+        accumulate!(product, ka + kb, wa * wb)
     end
     return filter!(!iszero ∘ last, product)
 end
@@ -452,7 +495,7 @@ function project_spectrum(
         a, b = real(w), imag(w)
         α, β = if target.kind != SinePart
             (a, -b)
-        elseif plus && minus # sin(0 t) vanishes
+        elseif plus && minus
             (zero(R), zero(R))
         else
             plus ? (-b, -a) : (b, a)
@@ -468,44 +511,137 @@ function project_spectrum(
     return contributions
 end
 
-"The spectrum of the trig product `signature`."
+"The spectra of trig products already convolved, keyed by their signature."
+const SpectrumCache{R} = Dict{Vector{Pair{Int,Int}},Spectrum{R}}
+
+"""
+The spectrum of the trig product `signature`. It is the spectrum of `signature` with one
+power of its last factor removed, convolved with that factor; the shorter product is looked
+up in `spectra` too, so signatures that share a prefix share its convolutions.
+"""
 function product_spectrum(
-    problem::ProjectionProblem{R}, signature::Vector{Pair{Int,Int}}
+    problem::ProjectionProblem{R},
+    signature::Vector{Pair{Int,Int}},
+    spectra::SpectrumCache{R},
 ) where {R}
-    spectrum = Spectrum{R}(zeros(R, problem.key_length) => one(Complex{R}))
-    for (factor, power) in signature, _ in 1:power
-        spectrum = convolve(spectrum, problem.factor_spectra[factor])
-    end
+    isempty(signature) &&
+        return Spectrum{R}([zeros(R, problem.key_length) => one(Complex{R})])
+    haskey(spectra, signature) && return spectra[signature]
+    factor, power = last(signature)
+    prefix = signature[1:(end - 1)]
+    power > 1 && push!(prefix, factor => power - 1)
+    spectrum = convolve(
+        product_spectrum(problem, prefix, spectra), problem.factor_spectra[factor]
+    )
+    spectra[signature] = spectrum
     return spectrum
 end
 
 "Projections of the trig product `signature` onto every target."
 function signature_contributions(
-    problem::ProjectionProblem{R}, signature::Vector{Pair{Int,Int}}, phases::PhaseTable{R}
+    problem::ProjectionProblem{R},
+    signature::Vector{Pair{Int,Int}},
+    phases::PhaseTable{R},
+    spectra::SpectrumCache{R},
 ) where {R}
-    spectrum = product_spectrum(problem, signature)
+    spectrum = product_spectrum(problem, signature, spectra)
     return [project_spectrum(spectrum, target, phases) for target in problem.targets]
 end
 
+"""
+The numeric weight of every term `rest * trig` of one numerator. Like terms are summed here,
+in exact arithmetic, so each surviving term is built as an expression only once.
+"""
+const TermWeights{R} = OrderedDict{
+    Tuple{Vector{SymbolicNode},SymbolicNode},Base.RefValue{R}
+}
+
+"""
+The terms of one projected coefficient, grouped by the denominator of the addend they came
+from. Each group is summed before it is divided, so equal denominators are divided once and
+their numerators merge, instead of leaving one fraction per term.
+"""
+const DenominatorGroups{R} = OrderedDict{SymbolicNode,TermWeights{R}}
+
 function push_term!(
-    terms::Vector{SymbolicNode}, weight::Real, addend::ScannedAddend, trig::SymbolicNode
-)
-    iszero(weight) && return terms
-    term = mul_worker(NUM_VARTYPE, (symbolic_number(weight), addend.rest, trig))
-    # Divide termwise so that common factors cancel within each term.
-    isequal(addend.denominator, SYMBOLIC_ONE) || (term = term / addend.denominator)
-    return push!(terms, term)
+    groups::DenominatorGroups{R}, weight::R, addend::ScannedAddend, trig::SymbolicNode
+) where {R}
+    iszero(weight) && return groups
+    weights = get!(TermWeights{R}, groups, addend.denominator)
+    total = get!(() -> Ref(zero(R)), weights, (addend.rest, trig))
+    total[] += weight
+    return groups
 end
 
-"Push the terms of every target's coefficient onto `terms`, one vector per target."
-function project!(
-    terms::Vector{Vector{SymbolicNode}}, problem::ProjectionProblem{R}
-) where {R}
+"The sum of every group's numerator over its denominator."
+function grouped_sum(groups::DenominatorGroups{R}) where {R}
+    fractions = SymbolicNode[]
+    for (denominator, weights) in groups
+        numerator = weighted_sum(weights)
+        isequal(numerator, SYMBOLIC_ZERO) && continue
+        push!(
+            fractions,
+            isequal(denominator, SYMBOLIC_ONE) ? numerator : numerator / denominator,
+        )
+    end
+    return polynomial(fractions)
+end
+
+"""
+The sum `Σ weight * Π rest * trig` as one expression, built from its coefficient dictionary
+with `SymbolicUtils.Add` rather than by adding a node per term. Keys that name the same
+monomial, such as a phase factor kept in `rest` or in `trig`, have their weights summed.
+"""
+function weighted_sum(weights::TermWeights{R}) where {R}
+    monomials = Dict{SymbolicNode,R}()
+    for ((rest, trig), total) in weights
+        weight = total[]
+        iszero(weight) && continue
+        key = monomial_node(rest, trig)
+        monomials[key] = get(monomials, key, zero(R)) + weight
+    end
+    constant = get(monomials, SYMBOLIC_ONE, zero(R))
+    coefficients = Dict{SymbolicNode,Number}()
+    for (key, weight) in monomials
+        iszero(weight) ||
+            isequal(key, SYMBOLIC_ONE) ||
+            (coefficients[key] = number_value(weight))
+    end
+    return SymbolicUtils.Add{NUM_VARTYPE}(number_value(constant), coefficients; type=Real)
+end
+
+"The number `value` in the narrowest type that holds it, as SymbolicUtils stores constants."
+number_value(value::Real) = value
+number_value(value::Rational) = isone(denominator(value)) ? numerator(value) : value
+
+"""
+The monomial `Π rest * trig` with unit coefficient. Plain atoms go straight into the power
+dictionary of `SymbolicUtils.Mul`; a factor that is itself a power, such as `x^(1//2)`, has
+to merge its exponent with any other power of the same base, which `mul_worker` does.
+"""
+function monomial_node(rest::Vector{SymbolicNode}, trig::SymbolicNode)
+    factors = isequal(trig, SYMBOLIC_ONE) ? rest : SymbolicNode[rest; trig]
+    isempty(factors) && return SYMBOLIC_ONE
+    length(factors) == 1 && return only(factors)
+    any(factor -> !isequal(last(base_exponent(factor)), SYMBOLIC_ONE), factors) &&
+        return mul_worker(NUM_VARTYPE, copy(factors))
+    counts = Dict{SymbolicNode,Int}()
+    for factor in factors
+        counts[factor] = get(counts, factor, 0) + 1
+    end
+    powers = Dict{SymbolicNode,Number}(factor => count for (factor, count) in counts)
+    return SymbolicUtils.Mul{NUM_VARTYPE}(1, powers; type=Real)
+end
+
+"The coefficient of every target of `problem`."
+function project(problem::ProjectionProblem{R}) where {R}
+    terms = [DenominatorGroups{R}() for _ in problem.targets]
     phases = PhaseTable{R}(problem.phase_atoms)
     cache = Dict{Vector{Pair{Int,Int}},Vector{Vector{PhaseContribution{R}}}}()
+    spectra = SpectrumCache{R}()
     for (addend, c) in zip(problem.addends, problem.coefficients)
         projected = get!(cache, addend.signature) do
-            return signature_contributions(problem, addend.signature, phases)
+            return signature_contributions(problem, addend.signature, phases, spectra)
         end
         for (target_terms, contributions) in zip(terms, projected), q in contributions
             push_term!(target_terms, c * q.cosine, addend, phases.cosines[q.phase])
@@ -513,7 +649,7 @@ function project!(
             push_term!(target_terms, c * q.sine, addend, phases.sines[q.phase])
         end
     end
-    return terms
+    return SymbolicNode[grouped_sum(groups) for groups in terms]
 end
 
 """
@@ -531,12 +667,8 @@ The coefficients are read off the exact exponential spectrum of each expanded ad
 which is built once for every distinct trig product in `x`.
 """
 function fourier_terms(x, t, specs)
-    scanned = scan_projection(x, t, specs)
-    terms = [SymbolicNode[] for _ in scanned.targets]
-    # `ProjectionProblem{R}` is the function barrier: `project!` is compiled for the
-    # concrete `R`, while `terms` keeps a type independent of it.
-    project!(terms, ProjectionProblem{scanned.numeric_type}(scanned))
-    return [expand(Num(polynomial(target_terms))) for target_terms in terms]
+    scanned = scan_projection(expanded_terms(unwrap(Num(x))), t, specs)
+    return Num[Num(term) for term in with_problem(project, scanned)]
 end
 
 function fourier_terms(x::Complex{Num}, t, specs)
@@ -549,6 +681,114 @@ function fourier_terms(x::Equation, t, specs)
     lhs = fourier_terms(x.lhs, t, specs)
     rhs = fourier_terms(x.rhs, t, specs)
     return [Equation(l, r) for (l, r) in zip(lhs, rhs)]
+end
+
+"One harmonic of a Fourier series: `cosine * cos(frequency * t) + sine * sin(frequency * t)`."
+struct FourierComponent
+    frequency::Num
+    cosine::Num
+    sine::Num
+end
+
+"""
+The first nonzero entry of the frequency vector `ν`, whose sign fixes the canonical sign of
+the harmonic: `cos` is even and `sin` odd, so `-ν` is folded onto `ν`.
+"""
+function leading_entry(ν::AbstractVector{R}) where {R}
+    for value in ν
+        iszero(value) || return value
+    end
+    return zero(R)
+end
+
+"""
+Accumulate every harmonic of `problem` into `cosines` and `sines`, keyed by the canonical
+frequency vector.
+
+A spectral term `w e^{i(ν t + φ)}` with `w = a + ib` contributes its real part
+`(a cos φ - b sin φ) cos(νt) - (a sin φ + b cos φ) sin(νt)`. The spectrum of a real
+expression pairs every term with its conjugate, so summing real parts over all terms gives
+the series. Folding `ν < 0` onto `-ν` flips the sign of the sine part.
+"""
+function series!(
+    cosines::Dict{Vector{R},DenominatorGroups{R}},
+    sines::Dict{Vector{R},DenominatorGroups{R}},
+    problem::ProjectionProblem{R},
+    nf::Int,
+) where {R}
+    phases = PhaseTable{R}(problem.phase_atoms)
+    spectra = SpectrumCache{R}()
+    for (addend, c) in zip(problem.addends, problem.coefficients)
+        spectrum = product_spectrum(problem, addend.signature, spectra)
+        for (key, w) in spectrum
+            ν = key[1:nf]
+            folded = leading_entry(ν) < 0
+            folded && (ν = -ν)
+            index, flipped = phase_index!(phases, key[(nf + 1):end])
+            a, b = real(w), imag(w)
+            s = flipped ? -one(R) : one(R)
+            cosine = get!(DenominatorGroups{R}, cosines, ν)
+            push_term!(cosine, c * a, addend, phases.cosines[index])
+            index == 1 || push_term!(cosine, -c * b * s, addend, phases.sines[index])
+            iszero(ν) && continue
+            sign = folded ? one(R) : -one(R)
+            sine = get!(DenominatorGroups{R}, sines, ν)
+            push_term!(sine, sign * c * b, addend, phases.cosines[index])
+            index == 1 || push_term!(sine, sign * c * a * s, addend, phases.sines[index])
+        end
+    end
+    return cosines, sines
+end
+
+"The frequency `Σ ν_i atom_i` of a harmonic."
+function frequency_expression(ν::AbstractVector{<:Real}, atoms::Vector{SymbolicNode})
+    return polynomial(
+        SymbolicNode[
+            symbolic_number(value) * atom for
+            (value, atom) in zip(ν, atoms) if !iszero(value)
+        ],
+    )
+end
+
+"""
+    fourier_series(x, t)
+
+The Fourier series of `x` in `t`, as one [`FourierComponent`](@ref) per harmonic present.
+The time-independent part comes first, at frequency zero with a zero sine, followed by the
+harmonics in increasing order of their frequency vectors. Harmonics whose coefficients
+cancel are dropped.
+
+`x` must satisfy the same conditions as for [`fourier_terms`](@ref).
+"""
+fourier_series(x, t) = expanded_fourier_series(expanded_terms(unwrap(Num(x))), t)
+
+"[`fourier_series`](@ref) of the expanded `terms`."
+function expanded_fourier_series(terms::Vector{ExpandedTerm}, t)
+    scanned = scan_projection(terms, t, Tuple{Num,typeof(cos)}[])
+    atoms = scanned.frequencies.atoms
+    return with_problem(problem -> fourier_series(problem, atoms), scanned)
+end
+
+function fourier_series(
+    problem::ProjectionProblem{R}, frequency_atoms::Vector{SymbolicNode}
+) where {R}
+    nf = length(frequency_atoms)
+    cosines = Dict{Vector{R},DenominatorGroups{R}}()
+    sines = Dict{Vector{R},DenominatorGroups{R}}()
+    series!(cosines, sines, problem, nf)
+    keys_sorted = sort!(collect(union(keys(cosines), keys(sines))))
+    components = FourierComponent[]
+    ordered = vcat(filter(iszero, keys_sorted), filter(!iszero, keys_sorted))
+    for ν in ordered
+        cosine = Num(grouped_sum(get(cosines, ν, DenominatorGroups{R}())))
+        sine = Num(grouped_sum(get(sines, ν, DenominatorGroups{R}())))
+        isequal(cosine, 0) && isequal(sine, 0) && continue
+        push!(
+            components,
+            FourierComponent(Num(frequency_expression(ν, frequency_atoms)), cosine, sine),
+        )
+    end
+    return components
 end
 
 """

@@ -1,12 +1,11 @@
-function dummy_symbolic_Jacobian(n::Int)::Matrix{Num}
-    return Num.(float.(collect(LinearAlgebra.I(n))) .* NaN)
-end
+"An `n`×`n` placeholder Jacobian of `NaN`s, sharing one symbolic constant."
+dummy_symbolic_Jacobian(n::Int) = fill(Num(NaN), n, n)
 
 flatten(a) = collect(Iterators.flatten(a))
 
 "Show fields of an object."
 function show_fields(object)
-    for field in fieldnames(typeof(object)) # display every field
+    for field in fieldnames(typeof(object))
         display(string(field))
         display(getfield(object, field))
     end

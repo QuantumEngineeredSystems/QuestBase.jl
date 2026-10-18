@@ -23,6 +23,10 @@ function HarmonicVariable(symbol::Num)
     return HarmonicVariable(symbol, "", "", Num(1), Num(0))
 end
 
+function Base.copy(hv::HarmonicVariable)
+    return HarmonicVariable(hv.symbol, hv.name, hv.type, hv.ω, hv.natural_variable)
+end
+
 function Base.show(io::IO, hv::HarmonicVariable)
     if isempty(hv.type)
         s = "Harmonic variable " * string.(hv.symbol)
@@ -50,11 +54,10 @@ function _show_ansatz(var::HarmonicVariable)
     return string(string(var.symbol) * terms[var.type])
 end
 
-# pretty-printing
 Base.display(var::HarmonicVariable) = display(var.name)
 Base.display(var::Vector{HarmonicVariable}) = display.(getfield.(var, Symbol("name")))
 
-function _coordinate_transform(new_var, ω, t, type)::Num
+function coordinate_transform(new_var, ω, t, type)::Num
     coords = Dict([
         "u" => new_var * cos(ω * t), "v" => new_var * sin(ω * t), "a" => new_var
     ])
@@ -73,17 +76,12 @@ the new harmonic variable.
 function _create_harmonic_variable(
     nat_var::Num, ω::Num, t::Num, type::String; new_symbol::String
 )::Tuple{Num,HarmonicVariable}
-    new_var = declare_variable(new_symbol, t) # this holds the internal symbol
+    new_var = declare_variable(new_symbol, t)
     name = type * "_{" * var_name(nat_var) * "," * Base.replace(string(ω), "*" => "") * "}"
-    # contribution of this harmonic variable to the natural variable
-    rule = _coordinate_transform(new_var, ω, t, type)
+    rule = coordinate_transform(new_var, ω, t, type)
     hvar = HarmonicVariable(new_var, name, type, ω, nat_var)
     return rule, hvar
 end
-
-###
-# Functions for variable substutions and manipulation of HarmonicVariable
-###
 
 "when HV is used for substitute, substitute its symbol"
 function QuestBase.substitute_all(eq::Union{Num,Equation}, rules::Dict{HarmonicVariable})

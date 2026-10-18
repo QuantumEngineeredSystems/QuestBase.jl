@@ -8,7 +8,7 @@ using QuestBase:
     var_name,
     HarmonicVariable,
     _show_ansatz,
-    _coordinate_transform,
+    coordinate_transform,
     @eqtest,
     _create_harmonic_variable,
     get_variables_nums
@@ -48,11 +48,11 @@ end
 @testset "Coordinate Transforms" begin
     new_var = declare_variable("y")
     # Test u-type transform
-    @eqtest _coordinate_transform(new_var, ω, t, "u") == new_var * cos(ω * t)
+    @eqtest coordinate_transform(new_var, ω, t, "u") == new_var * cos(ω * t)
     # Test v-type transform
-    @eqtest _coordinate_transform(new_var, ω, t, "v") == new_var * sin(ω * t)
+    @eqtest coordinate_transform(new_var, ω, t, "v") == new_var * sin(ω * t)
     # Test a-type transform
-    @eqtest _coordinate_transform(new_var, ω, t, "a") == new_var
+    @eqtest coordinate_transform(new_var, ω, t, "a") == new_var
 end
 
 @testset "Create Harmonic Variable" begin

@@ -36,7 +36,6 @@ mutable struct DifferentialEquation
         return new(OrderedDict{Num,Equation}(), OrderedDict{Num,OrderedSet{Num}}())
     end
 
-    # uses the above constructor if no harmonics defined
     function DifferentialEquation(eqs::Vector{Equation}, vars::Vector{Num})
         if length(eqs) != length(vars)
             throw(ArgumentError("The number of equations and variables are not the same."))
@@ -44,7 +43,6 @@ mutable struct DifferentialEquation
         return DifferentialEquation(OrderedDict(zip(vars, eqs)))
     end
 
-    # if expressions are entered instead of equations, automatically set them = 0
     function DifferentialEquation(exprs::Vector{Num}, vars::Vector{Num})
         return DifferentialEquation(exprs .~ Int(0), vars)
     end
@@ -73,6 +71,15 @@ mutable struct DifferentialEquation
         )
     end
     DifferentialEquation(lhs::Num, var::Num) = DifferentialEquation([lhs ~ Int(0)], [var])
+end
+
+function Base.copy(diff_eq::DifferentialEquation)
+    new_eq = DifferentialEquation()
+    new_eq.equations = copy(diff_eq.equations)
+    new_eq.harmonics = OrderedDict{Num,OrderedSet{Num}}(
+        var => copy(harmonics) for (var, harmonics) in diff_eq.harmonics
+    )
+    return new_eq
 end
 
 "show method of the type `DifferentialEquation`"
@@ -181,53 +188,46 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Rearranges the differential equations in `eom` to standard form, where the highest derivative
-of each variable (specified by `degree`, default 2) appears isolated on the left-hand side.
-Modifies the equations in place.
+Rearrange the equations in `eom` such that the expressions in `new_lhs` appear isolated on the
+left-hand sides. Modifies `eom` in place and returns it.
+"""
+function rearrange!(eom::DifferentialEquation, new_lhs::Vector{Num})
+    soln = solve_linear_system(get_equations(eom), new_lhs)
+    eom.equations = OrderedDict(zip(collect(keys(eom.equations)), new_lhs .~ soln))
+    return eom
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Non-mutating version of [`rearrange!`](@ref).
+"""
+function rearrange(eom::DifferentialEquation, new_lhs::Vector{Num})
+    return rearrange!(copy(eom), new_lhs)
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Rearrange `eom` to standard form, where the highest derivative of each variable (specified by
+`degree`, default 2) appears isolated on the left-hand side. Modifies `eom` in place and
+returns it.
 """
 function rearrange_standard!(eom::DifferentialEquation, degree=2)
     tvar = get_independent_variables(eom)[1]
     D = Differential(tvar)^degree
-    dvars = D.(get_variables(eom))
-    return rearrange!(eom, dvars)
+    return rearrange!(eom, D.(get_variables(eom)))
 end
 
 """
 $(TYPEDSIGNATURES)
 
-Rearranges the equations in `eom` such that the expressions in `new_lhs` appear isolated on
-the left-hand sides. Uses symbolic linear solving to determine the right-hand sides. Modifies
-the equations in place.
+Non-mutating version of [`rearrange_standard!`](@ref).
 """
-function rearrange!(eom::DifferentialEquation, new_lhs::Vector{Num})
-    soln = try
-        fraction_free_linear_solve(get_equations(eom), new_lhs)
-    catch error
-        error isa BareissFailure || rethrow()
-        Num.(
-            Symbolics.symbolic_linear_solve(
-                get_equations(eom), new_lhs; simplify=false, check=true
-            ),
-        )
-    end
-    # Use original variable keys (not extracted from new_lhs, as v7's get_variables
-    # treats derivatives as variables)
-    eom.equations = OrderedDict(zip(collect(keys(eom.equations)), new_lhs .~ soln))
-    return nothing
+function rearrange_standard(eom::DifferentialEquation, degree=2)
+    return rearrange_standard!(copy(eom), degree)
 end
+
 function get_variables_nums(vars::Vector{Num})
     return unique(flatten([Num.(get_variables(x)) for x in vars]))
-end # TODO: remove this function or at least better names
-
-"""
-$(TYPEDSIGNATURES)
-
-Creates a new differential equation system by rearranging the equations in `eom` such that
-the expressions in `new_lhs` appear isolated on the left-hand sides. Similar to `rearrange!`
-but returns a new system instead of modifying in place.
-"""
-function rearrange(eom::DifferentialEquation, new_lhs::Vector{Num})
-    new_eom = deepcopy(eom)
-    rearrange!(new_eom, new_lhs)
-    return new_eom
 end

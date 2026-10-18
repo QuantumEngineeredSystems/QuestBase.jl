@@ -34,11 +34,17 @@ $(TYPEDSIGNATURES)
 Declare a variable named `name` that is a function of `independent_variable`.
 """
 function declare_variable(name::String, independent_variable::Num)
-    return Symbolics.variable(Symbol(name); T=_FnTypeReal)(independent_variable)
+    function_symbol = SymbolicUtils.Sym{NUM_VARTYPE}(Symbol(name); type=_FnTypeReal)
+    return Num(function_symbol(unwrap(independent_variable)))
 end
 
 "Return the name of a variable (excluding independent variables)"
-function var_name(x::Num)::String
-    return String(tosymbol(x; escape=false))
+var_name(x::Num) = var_name(unwrap(x))
+function var_name(x::SymbolicNode)
+    return @match x begin
+        BSImpl.Sym(; name) => String(name)
+        BSImpl.Term(; f) && if f isa SymbolicNode
+        end => var_name(f)
+        _ => throw(ArgumentError("$x is not a variable."))
+    end
 end
-var_name(x::BasicSymbolic) = issym(x) ? String(nameof(x)) : error("Expected a Sym")
