@@ -129,7 +129,10 @@ end
         cos(ω * t) * d(u1, T) + sin(ω * t) * d(v1, T) ~ u1,
         -sin(ω * t) * d(u1, T) + cos(ω * t) * d(v1, T) ~ v1,
     ]
-    hvars = [HarmonicVariable(u1, "u", CosineQuadrature, ω, x), HarmonicVariable(v1, "v", SineQuadrature, ω, x)]
+    hvars = [
+        HarmonicVariable(u1, "u", CosineQuadrature, ω, x),
+        HarmonicVariable(v1, "v", SineQuadrature, ω, x),
+    ]
     natural_eq = DifferentialEquation(d(x, t, 2) + x ~ 0, x)
     eom = HarmonicEquation(eqs, hvars, natural_eq)
 

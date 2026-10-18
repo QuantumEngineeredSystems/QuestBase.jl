@@ -126,7 +126,7 @@ function show_ansatz(eom::HarmonicEquation)
             show_ansatz(hv) for hv in eom.variables if
             isequal(nat_var, hv.natural_variable) && hv.kind != LimitCycleFrequency
         ]
-        "\n" * string(nat_var) * " = " * join(terms, " + ")
+        return "\n" * string(nat_var) * " = " * join(terms, " + ")
     end
     return join(lines)
 end

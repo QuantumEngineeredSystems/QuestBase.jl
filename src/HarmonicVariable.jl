@@ -88,7 +88,9 @@ function coordinate_transform(new_var::Num, ω::Num, t::Num, kind::HarmonicKind)
     kind == CosineQuadrature && return new_var * cos(ω * t)
     kind == SineQuadrature && return new_var * sin(ω * t)
     kind == ZeroHarmonic && return new_var
-    throw(ArgumentError("no coordinate transform for a harmonic variable of kind $kind"))
+    return throw(
+        ArgumentError("no coordinate transform for a harmonic variable of kind $kind")
+    )
 end
 
 """
@@ -104,7 +106,13 @@ function create_harmonic_variable(
     nat_var::Num, ω::Num, t::Num, kind::HarmonicKind; new_symbol::String
 )::Tuple{Num,HarmonicVariable}
     new_var = declare_variable(new_symbol, t)
-    name = kind_label(kind) * "_{" * var_name(nat_var) * "," * Base.replace(string(ω), "*" => "") * "}"
+    name =
+        kind_label(kind) *
+        "_{" *
+        var_name(nat_var) *
+        "," *
+        Base.replace(string(ω), "*" => "") *
+        "}"
     rule = coordinate_transform(new_var, ω, t, kind)
     hvar = HarmonicVariable(new_var, name, kind, ω, nat_var)
     return rule, hvar
