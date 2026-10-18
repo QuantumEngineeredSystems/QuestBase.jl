@@ -6,6 +6,8 @@ using QuestBase
 using QuestBase:
     DifferentialEquation,
     HarmonicVariable,
+    CosineQuadrature,
+    SineQuadrature,
     HarmonicEquation,
     harmonic_parameters,
     get_variables,
@@ -13,7 +15,7 @@ using QuestBase:
     rearrange_standard,
     substitute_all,
     is_rearranged,
-    _remove_brackets,
+    remove_brackets,
     declare_variables,
     dummy_symbolic_Jacobian,
     @eqtest,
@@ -33,8 +35,8 @@ eq2 = D(v) ~ -u + v
 nat_eq = DifferentialEquation([eq1, eq2], [x, y])
 
 # Create test harmonic variables
-hv1 = HarmonicVariable(u, "test", "u", Num(1.0), x)
-hv2 = HarmonicVariable(v, "test", "v", Num(1.0), y)
+hv1 = HarmonicVariable(u, "test", CosineQuadrature, Num(1.0), x)
+hv2 = HarmonicVariable(v, "test", SineQuadrature, Num(1.0), y)
 
 # Test constructor
 @testset "Construction" begin
@@ -114,8 +116,8 @@ end
 @testset "Utility functions" begin
     heq = HarmonicEquation([eq1, eq2], [hv1, hv2], nat_eq)
 
-    # Test _remove_brackets
-    no_brackets = _remove_brackets(heq)
+    # Test remove_brackets
+    no_brackets = remove_brackets(heq)
 
     list = get_all_terms.(Symbolics.expand_derivatives.(no_brackets))
     list = unique(filter(x -> !(x isa Real), Symbolics.unwrap.(reduce(vcat, list))))

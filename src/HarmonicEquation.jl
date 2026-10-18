@@ -113,23 +113,22 @@ function Base.show(io::IO, eom::HarmonicEquation)
     println(io, "A set of ", length(eom.equations), " harmonic equations")
     println(io, "Variables: ", join(string.(get_variables(eom)), ", "))
     println(io, "Parameters: ", join(string.(eom.parameters), ", "))
-    println(io, "\nHarmonic ansatz: ", _show_ansatz(eom))
+    println(io, "\nHarmonic ansatz: ", show_ansatz(eom))
     println(io, "\nHarmonic equations:")
     return [println(io, "\n", eq) for eq in eom.equations]
 end
 
 """Gives the full harmonic ansatz used to construct `eom`."""
-function _show_ansatz(eom::HarmonicEquation)
-    output = ""
-    vars = unique(getfield.(eom.variables, :natural_variable))
-    for nat_var in vars
-        harm_vars = filter(
-            x -> isequal(nat_var, x.natural_variable) && x.type !== "Hopf", eom.variables
-        )
-        ansatz = join([_show_ansatz(var) for var in harm_vars], " + ")
-        output *= "\n" * string(nat_var) * " = " * ansatz
+function show_ansatz(eom::HarmonicEquation)
+    natural_variables = unique(Num[hv.natural_variable for hv in eom.variables])
+    lines = map(natural_variables) do nat_var
+        terms = String[
+            show_ansatz(hv) for hv in eom.variables if
+            isequal(nat_var, hv.natural_variable) && hv.kind != LimitCycleFrequency
+        ]
+        "\n" * string(nat_var) * " = " * join(terms, " + ")
     end
-    return output
+    return join(lines)
 end
 
 Base.show(eom::HarmonicEquation) = show_fields(eom)
@@ -177,19 +176,19 @@ function get_independent_variables(eom::HarmonicEquation)
     )
 end
 
-_remove_brackets(var::Num) = declare_variable(var_name(var))
-_remove_brackets(vars::Vector{Num}) = _remove_brackets.(vars)
-_remove_brackets(hv::HarmonicVariable) = _remove_brackets(hv.symbol)
+remove_brackets(var::Num) = declare_variable(var_name(var))
+remove_brackets(vars::Vector{Num}) = remove_brackets.(vars)
+remove_brackets(hv::HarmonicVariable) = remove_brackets(hv.symbol)
 
 "Returns the equation system in `eom`, dropping all argument brackets (i.e., u(T) becomes u)."
-function _remove_brackets(eom::HarmonicEquation)
-    variable_rules = [var => _remove_brackets(var) for var in get_variables(eom)]
+function remove_brackets(eom::HarmonicEquation)
+    variable_rules = [var => remove_brackets(var) for var in get_variables(eom)]
     equations_lhs = Num.(getfield.(eom.equations, :lhs) - getfield.(eom.equations, :rhs))
     return substitute_all(equations_lhs, variable_rules)
 end
 
-function _remove_brackets(eqs::Vector{Num}, vars::Vector{Num})
-    vars_ = _remove_brackets.(vars)
+function remove_brackets(eqs::Vector{Num}, vars::Vector{Num})
+    vars_ = remove_brackets.(vars)
     variable_rules = Dict(zip(vars, vars_))
     return substitute_all(eqs, variable_rules), vars_
 end
@@ -245,7 +244,7 @@ function is_rearranged(eom::HarmonicEquation)
     rhs = getfield.(eom.equations, :rhs)
 
     HB_bool = isequal(rhs, dvar)
-    hopf_bool = any(hv -> hv.type == "Hopf", eom.variables)
+    hopf_bool = any(hv -> hv.kind == LimitCycleFrequency, eom.variables)
     MF_bool = !any(occurs_in(dv, l) for dv in dvar, l in lhs)
 
     return HB_bool || hopf_bool || MF_bool

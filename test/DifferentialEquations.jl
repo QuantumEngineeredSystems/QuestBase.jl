@@ -16,7 +16,7 @@ using QuestBase:
     is_rearranged_standard,
     rearrange,
     substitute_all,
-    _remove_brackets,
+    remove_brackets,
     declare_variables,
     dummy_symbolic_Jacobian,
     get_all_terms
