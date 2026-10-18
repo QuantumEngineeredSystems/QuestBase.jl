@@ -121,6 +121,7 @@ end
     # LU fractions. For a trigonometric ansatz that determinant contains
     # cos² + sin² = 1, which `rearrange!` must collapse before downstream averaging.
     using QuestBase: HarmonicEquation, HarmonicVariable, DifferentialEquation
+    using QuestBase: CosineQuadrature, SineQuadrature
     using QuestBase: rearrange!, d
     @variables ω t T u1(T) v1(T) x(t)
 
@@ -128,7 +129,10 @@ end
         cos(ω * t) * d(u1, T) + sin(ω * t) * d(v1, T) ~ u1,
         -sin(ω * t) * d(u1, T) + cos(ω * t) * d(v1, T) ~ v1,
     ]
-    hvars = [HarmonicVariable(u1, "u", "u", ω, x), HarmonicVariable(v1, "v", "v", ω, x)]
+    hvars = [
+        HarmonicVariable(u1, "u", CosineQuadrature, ω, x),
+        HarmonicVariable(v1, "v", SineQuadrature, ω, x),
+    ]
     natural_eq = DifferentialEquation(d(x, t, 2) + x ~ 0, x)
     eom = HarmonicEquation(eqs, hvars, natural_eq)
 

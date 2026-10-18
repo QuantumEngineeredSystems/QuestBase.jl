@@ -1,4 +1,34 @@
 """
+Role of a [`HarmonicVariable`](@ref) in the ansatz of its natural variable.
+
+- `CosineQuadrature`: the variable `u` multiplying `cos(ωt)`.
+- `SineQuadrature`: the variable `v` multiplying `sin(ωt)`.
+- `ZeroHarmonic`: the constant part `a`.
+- `LimitCycleFrequency`: the limit-cycle frequency that replaces a gauge-fixed quadrature.
+- `Unassigned`: a bare symbol outside any harmonic ansatz.
+"""
+@enum HarmonicKind begin
+    CosineQuadrature
+    SineQuadrature
+    ZeroHarmonic
+    LimitCycleFrequency
+    Unassigned
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Short label of `kind` used in variable names: `u`, `v`, `a`, `Hopf` or the empty string.
+"""
+function kind_label(kind::HarmonicKind)
+    kind == CosineQuadrature && return "u"
+    kind == SineQuadrature && return "v"
+    kind == ZeroHarmonic && return "a"
+    kind == LimitCycleFrequency && return "Hopf"
+    return ""
+end
+
+"""
 $(TYPEDEF)
 
 Holds a variable stored under `symbol` describing the harmonic `ω` of `natural_variable`.
@@ -11,8 +41,8 @@ mutable struct HarmonicVariable
     symbol::Num
     """Human-readable labels of the variable, used for plotting."""
     name::String
-    """Type of the variable (u or v for quadratures, a for a constant, Hopf for Hopf etc.)"""
-    type::String
+    """Role of the variable in the ansatz."""
+    kind::HarmonicKind
     """The harmonic being described."""
     ω::Num
     """The natural variable whose harmonic is being described."""
@@ -20,15 +50,15 @@ mutable struct HarmonicVariable
 end
 
 function HarmonicVariable(symbol::Num)
-    return HarmonicVariable(symbol, "", "", Num(1), Num(0))
+    return HarmonicVariable(symbol, "", Unassigned, Num(1), Num(0))
 end
 
 function Base.copy(hv::HarmonicVariable)
-    return HarmonicVariable(hv.symbol, hv.name, hv.type, hv.ω, hv.natural_variable)
+    return HarmonicVariable(hv.symbol, hv.name, hv.kind, hv.ω, hv.natural_variable)
 end
 
 function Base.show(io::IO, hv::HarmonicVariable)
-    if isempty(hv.type)
+    if hv.kind == Unassigned
         s = "Harmonic variable " * string.(hv.symbol)
     else
         s =
@@ -43,25 +73,24 @@ function Base.show(io::IO, hv::HarmonicVariable)
 end
 
 """Gives the relation between `var` and the underlying natural variable."""
-function _show_ansatz(var::HarmonicVariable)
-    if isempty(var.type)
-        return string(var.symbol)
-    end
+function show_ansatz(var::HarmonicVariable)
+    var.kind in (CosineQuadrature, SineQuadrature) || return string(var.symbol)
     t = arguments(unwrap(var.natural_variable))
     t = length(t) == 1 ? string(t[1]) : error("more than 1 independent variable")
-    ω = string(var.ω)
-    terms = Dict("u" => "*cos(" * ω * t * ")", "v" => "*sin(" * ω * t * ")", "a" => "")
-    return string(string(var.symbol) * terms[var.type])
+    trig = var.kind == CosineQuadrature ? "cos" : "sin"
+    return string(var.symbol) * "*" * trig * "(" * string(var.ω) * t * ")"
 end
 
 Base.display(var::HarmonicVariable) = display(var.name)
 Base.display(var::Vector{HarmonicVariable}) = display.(getfield.(var, Symbol("name")))
 
-function coordinate_transform(new_var, ω, t, type)::Num
-    coords = Dict([
-        "u" => new_var * cos(ω * t), "v" => new_var * sin(ω * t), "a" => new_var
-    ])
-    return coords[type]
+function coordinate_transform(new_var::Num, ω::Num, t::Num, kind::HarmonicKind)
+    kind == CosineQuadrature && return new_var * cos(ω * t)
+    kind == SineQuadrature && return new_var * sin(ω * t)
+    kind == ZeroHarmonic && return new_var
+    return throw(
+        ArgumentError("no coordinate transform for a harmonic variable of kind $kind")
+    )
 end
 
 """
@@ -69,17 +98,23 @@ $(TYPEDSIGNATURES)
 
 Creates a new harmonic variable and its corresponding transformation rule.
 This function takes a natural variable (`nat_var`), a harmonic frequency (`ω`),
-an independent variable (`t`), and a type (`type`), and creates a new harmonic variable with
+an independent variable (`t`), and a [`HarmonicKind`](@ref) (`kind`), and creates a new harmonic variable with
 the specified `new_symbol`. It returns a tuple containing the transformation rule and
 the new harmonic variable.
 """
-function _create_harmonic_variable(
-    nat_var::Num, ω::Num, t::Num, type::String; new_symbol::String
+function create_harmonic_variable(
+    nat_var::Num, ω::Num, t::Num, kind::HarmonicKind; new_symbol::String
 )::Tuple{Num,HarmonicVariable}
     new_var = declare_variable(new_symbol, t)
-    name = type * "_{" * var_name(nat_var) * "," * Base.replace(string(ω), "*" => "") * "}"
-    rule = coordinate_transform(new_var, ω, t, type)
-    hvar = HarmonicVariable(new_var, name, type, ω, nat_var)
+    name =
+        kind_label(kind) *
+        "_{" *
+        var_name(nat_var) *
+        "," *
+        Base.replace(string(ω), "*" => "") *
+        "}"
+    rule = coordinate_transform(new_var, ω, t, kind)
+    hvar = HarmonicVariable(new_var, name, kind, ω, nat_var)
     return rule, hvar
 end
 
@@ -95,7 +130,7 @@ function QuestBase.substitute_all(var::HarmonicVariable, rules)
     return HarmonicVariable(
         substitute_all(sym, rules),
         var.name,
-        var.type,
+        var.kind,
         substitute_all(freq, rules),
         var.natural_variable,
     )

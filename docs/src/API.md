@@ -28,6 +28,8 @@ QuestBase.get_variables(::QuestBase.DifferentialEquation)
 
 ```@docs
 QuestBase.HarmonicVariable
+QuestBase.HarmonicKind
+QuestBase.kind_label
 QuestBase.add_harmonic!
 ```
 

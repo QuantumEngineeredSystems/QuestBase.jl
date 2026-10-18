@@ -16,7 +16,7 @@ $(TYPEDSIGNATURES)
 Declare a symbolic variable named `name`.
 
 `Symbolics.@variables` needs the name as a literal, so names only known at runtime (`u1`,
-`v2`, the bracket-free copies [`_remove_brackets`](@ref) makes) have to go through
+`v2`, the bracket-free copies [`remove_brackets`](@ref) makes) have to go through
 `Symbolics.variable` instead.
 
 This used to build the variable with `@eval` and bind the result inside this module. Nothing

@@ -5,6 +5,11 @@ using Symbolics: Symbolics, Differential, Num, @variables, unwrap
 using QuestBase:
     DifferentialEquation,
     HarmonicVariable,
+    CosineQuadrature,
+    SineQuadrature,
+    create_harmonic_variable,
+    kind_label,
+    show_ansatz,
     HarmonicEquation,
     add_harmonic!,
     collapse_pythagorean,
@@ -71,8 +76,8 @@ end
     duffing = d(X, t, 2) + γ * d(X, t) + ω0^2 * X + α * X^3 ~ F * cos(ω * t)
     diff_eq = DifferentialEquation(duffing, X)
     add_harmonic!(diff_eq, X, ω)
-    u = HarmonicVariable(U, "test", "u", Num(1.0), X)
-    v = HarmonicVariable(V, "test", "v", Num(1.0), X)
+    u = HarmonicVariable(U, "test", CosineQuadrature, Num(1.0), X)
+    v = HarmonicVariable(V, "test", SineQuadrature, Num(1.0), X)
     harmonic_eq = HarmonicEquation([D(U) + U ~ V, D(V) ~ -U + a * V], [u, v], diff_eq)
 
     trig_polynomial = (a * cos(ω * t) + b * sin(2ω * t))^3
@@ -88,6 +93,10 @@ end
             "declare_variables" => () -> declare_variables(harmonic_eq),
             "declare_variable" => () -> declare_variable("z", t),
             "dummy_symbolic_Jacobian" => () -> dummy_symbolic_Jacobian(2),
+            "create_harmonic_variable" =>
+                () -> create_harmonic_variable(X, ω, t, CosineQuadrature; new_symbol="w"),
+            "kind_label" => () -> kind_label(SineQuadrature),
+            "show_ansatz" => () -> show_ansatz(harmonic_eq),
         ])
     end
 
